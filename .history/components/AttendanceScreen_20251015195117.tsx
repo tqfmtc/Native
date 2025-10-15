@@ -1,0 +1,380 @@
+import * as Location from 'expo-location';
+import React, { useEffect, useState } from 'react';
+import {
+    ActivityIndicator,
+    Alert,
+    Dimensions,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
+} from 'react-native';
+import { WebView } from 'react-native-webview';
+import { APP_CONFIG } from '../constants/config';
+import { 
+    Announcement, 
+    getAnnouncements, 
+    getRecentAttendance, 
+    getButtonStatus, // Add this import
+    LoginResponse, 
+    markAttendance 
+} from '../utils/api';
+import { calculateDistance, isWithinRadius, LocationCoords } from '../utils/location';
+import { clearStoredCredentials } from '../utils/storage';
+
+interface AttendanceScreenProps {
+  userData: LoginResponse;
+  onLogout: () => void;
+}
+
+export default function AttendanceScreen({ userData, onLogout }: AttendanceScreenProps) {
+  const [currentLocation, setCurrentLocation] = useState<LocationCoords | null>(null);
+  const [attendanceMarked, setAttendanceMarked] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [locationLoading, setLocationLoading] = useState(true);
+  const [buttonEnabled, setButtonEnabled] = useState(true); // New state for button status
+  const [checkingButtonStatus, setCheckingButtonStatus] = useState(true); // Loading state for button status
+
+  useEffect(() => {
+    getCurrentLocation();
+    checkTodayAttendance();
+    checkButtonStatus(); // Add this function call
+    showLatestAnnouncement();
+  }, []);
+
+  // New function to check button status from API
+  const checkButtonStatus = async () => {
+    try {
+      setCheckingButtonStatus(true);
+      const response = await getButtonStatus(userData.token);
+      setButtonEnabled(response.status);
+    } catch (error) {
+      console.log('Failed to check button status:', error);
+      // Default to enabled if API call fails
+      setButtonEnabled(true);
+    } finally {
+      setCheckingButtonStatus(false);
+    }
+  };
+
+  // Check if today's attendance already exists and update UI
+  const checkTodayAttendance = async () => {
+    try {
+      const recent = await getRecentAttendance(userData.token);
+      if (Array.isArray(recent) && recent.length > 0) {
+        setAttendanceMarked(true);
+      }
+    } catch (err) {
+      console.log('Failed to check recent attendance:', err);
+    }
+  };
+
+  // Always show the latest announcement on entering dashboard
+  const showLatestAnnouncement = async () => {
+    try {
+      const list: Announcement[] = await getAnnouncements(userData.token);
+      if (Array.isArray(list) && list.length > 0) {
+        const latest = list[0];
+        Alert.alert(latest.title || 'Announcement', latest.body, [{ text: 'OK' }], {
+          cancelable: true,
+        });
+      }
+    } catch (e) {
+      // Silent fail if announcements endpoint not reachable
+      console.log('Announcements fetch failed:', e);
+    }
+  };
+
+  const getCurrentLocation = async () => {
+    try {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert('Permission Denied', 'Location permission is required to mark attendance');
+        return;
+      }
+
+      const location = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+      });
+
+      setCurrentLocation({
+        lat: location.coords.latitude,
+        lng: location.coords.longitude,
+      });
+    } catch (error) {
+      Alert.alert('Location Error', 'Unable to get your current location');
+      console.error('Location error:', error);
+    } finally {
+      setLocationLoading(false);
+    }
+  };
+
+  const handleMarkAttendance = async () => {
+    // Check if button is disabled by admin first
+    if (!buttonEnabled) {
+      Alert.alert('Attendance Disabled', 'Attendance has been disabled by the administrator');
+      return;
+    }
+
+    // Check for Sunday
+    if (new Date().getDay() === 0) {
+      Alert.alert('Attendance Disabled', 'Sunday attendance is disabled');
+      return;
+    }
+
+    if (!currentLocation || !userData?.assignedCenter) {
+      Alert.alert('Error', 'Location or center data not available');
+      return;
+    }
+
+    const centerLocation: LocationCoords = {
+      lat: userData.assignedCenter.coordinates[0],
+      lng: userData.assignedCenter.coordinates[1],
+    };
+
+    const withinRadius = isWithinRadius(currentLocation, centerLocation, APP_CONFIG.ATTENDANCE_RADIUS);
+
+    if (!withinRadius) {
+      const distance = Math.round(calculateDistance(currentLocation, centerLocation));
+      Alert.alert(
+        'Out of Range',
+        `You are ${distance}m away from the center. You need to be within ${APP_CONFIG.ATTENDANCE_RADIUS}m to mark attendance.`
+      );
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const coordinates: [number, number] = [currentLocation.lat, currentLocation.lng];
+
+      // Validate coordinates before sending
+      if (!Array.isArray(coordinates) || coordinates.length !== 2 || !coordinates.every(coord => typeof coord === 'number' && !isNaN(coord))) {
+        throw new Error('Invalid coordinates: ' + JSON.stringify(coordinates));
+      }
+
+      const resp = await markAttendance(coordinates, userData.token);
+      // Waited for server response; ensure it matches expected structure
+      if (resp?.message === 'Attendance submitted successfully') {
+        setAttendanceMarked(true);
+        Alert.alert('Success', 'Attendance marked successfully');
+      } 
+      else if(resp?.message==='Attendance disabled by Admin'){
+        Alert.alert('Attendance Disabled', 'Attendance marking has been disabled by the ADMIN.');
+      }
+      else if(resp?.message==='Attendance only allowed at respective time'){
+        Alert.alert('Attendance not allowed', 'Attendance can only be marked during ${resp.assignedTime}.');
+      }
+      else {
+        // Fallback
+        setAttendanceMarked(true);
+        Alert.alert('Success', resp?.message || 'Attendance marked successfully');
+      }
+    } catch (error) {
+      console.error('Attendance marking error:', error);
+      if (error instanceof Error) {
+        if (error.message.includes('400')) {
+          Alert.alert('Attendance Error', 'Invalid request. Please check your location and try again.\n\nDetails: ' + error.message);
+        } else if (error.message.includes('401')) {
+          Alert.alert('Authentication Error', 'Your session has expired. Please login again.');
+        } else if (error.message.includes('403')) {
+          Alert.alert('Permission Error', 'You do not have permission to mark attendance.');
+        } else {
+          Alert.alert('Error', error.message);
+        }
+      } else {
+        Alert.alert('Error', 'Failed to mark attendance');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Rest of your existing functions remain the same...
+  const handleLogout = async () => {
+    Alert.alert(
+      'Logout',
+      'Are you sure you want to logout?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Logout',
+          style: 'destructive',
+          onPress: async () => {
+            await clearStoredCredentials();
+            onLogout();
+          },
+        },
+      ]
+    );
+  };
+
+  const formatDate = () => {
+    const now = new Date();
+    return now.toLocaleDateString('en-US', {
+      weekday: 'long',
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    });
+  };
+
+  const formatTime = () => {
+    const now = new Date();
+    return now.toLocaleTimeString('en-US', {
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+    });
+  };
+
+  return (
+    <View style={styles.container}>
+      {/* Header - remains the same */}
+      <View style={styles.header}>
+        <View style={styles.headerContent}>
+          <Text style={styles.date}>{formatDate()}</Text>
+          <Text style={styles.time}>{formatTime()}</Text>
+          <Text style={styles.centerName}>Center: {userData.assignedCenter?.name || 'No Center Assigned'}</Text>
+          <Text style={styles.username}> Welcome {userData.name || 'Guest'}</Text>
+        </View>
+        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+          <Text style={styles.logoutButtonText}>Logout</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Attendance Button */}
+      <View style={styles.attendanceContainer}>
+        <TouchableOpacity
+          style={[
+            styles.attendanceButton,
+            new Date().getDay() === 0 && styles.attendanceButtonSunday,
+            attendanceMarked && styles.attendanceButtonMarked,
+            (loading || !buttonEnabled || checkingButtonStatus) && styles.attendanceButtonDisabled, // Updated condition
+          ]}
+          onPress={handleMarkAttendance}
+          disabled={loading || attendanceMarked || !buttonEnabled || checkingButtonStatus} // Updated condition
+        >
+          {loading || checkingButtonStatus ? (
+            <ActivityIndicator size="large" color="#fff" />
+          ) : (
+            <Text style={styles.attendanceButtonText}>
+              {!buttonEnabled 
+                ? 'Attendance Disabled by Admin' 
+                : attendanceMarked 
+                ? 'Attendance Marked Successfully' 
+                : 'Mark Attendance'
+              }
+            </Text>
+          )}
+        </TouchableOpacity>
+        
+        {currentLocation && userData?.assignedCenter && (
+          <View style={styles.distanceInfo}>
+            <Text style={styles.distanceText}>
+              Distance to center: {Math.round(calculateDistance(
+                currentLocation,
+                {
+                  lat: userData.assignedCenter.coordinates[0],
+                  lng: userData.assignedCenter.coordinates[1],
+                }
+              ))}m
+            </Text>
+            <Text style={styles.radiusText}>
+              Required: Within {APP_CONFIG.ATTENDANCE_RADIUS}m
+            </Text>
+          </View>
+        )}
+      </View>
+
+      {/* Map section remains exactly the same */}
+      <View style={styles.mapContainer}>
+        {locationLoading ? (
+          <View style={styles.mapLoadingContainer}>
+            <ActivityIndicator size="large" color="#007AFF" />
+            <Text style={styles.mapLoadingText}>Loading map...</Text>
+          </View>
+        ) : currentLocation && userData.assignedCenter ? (
+          <WebView
+            style={styles.map}
+            source={{
+              html: `
+                <!DOCTYPE html>
+                <html>
+                <head>
+                  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+                  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+                  <style>
+                    body { margin: 0; padding: 0; }
+                    #map { height: 100vh; width: 100vw; }
+                  </style>
+                </head>
+                <body>
+                  <div id="map"></div>
+                  <script>
+                    const centerLat = ${userData.assignedCenter.coordinates[0]};
+                    const centerLng = ${userData.assignedCenter.coordinates[1]};
+                    const userLat = ${currentLocation.lat};
+                    const userLng = ${currentLocation.lng};
+                    const radius = ${APP_CONFIG.ATTENDANCE_RADIUS};
+                    
+                    const map = L.map('map').setView([centerLat, centerLng], 16);
+                    
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                      attribution: '© OpenStreetMap contributors'
+                    }).addTo(map);
+                    
+                    const centerIcon = L.divIcon({
+                      className: 'custom-div-icon',
+                      html: "<div style='background-color: blue; width: 20px; height: 20px; border-radius: 50%; border: 2px solid white;'></div>",
+                      iconSize: [20, 20],
+                      iconAnchor: [10, 10]
+                    });
+                    L.marker([centerLat, centerLng], {icon: centerIcon})
+                      .addTo(map)
+                      .bindPopup('${userData.assignedCenter.name}<br>Center Location');
+                    
+                    const userIcon = L.divIcon({
+                      className: 'custom-div-icon',
+                      html: "<div style='background-color: red; width: 20px; height: 20px; border-radius: 50%; border: 2px solid white;'></div>",
+                      iconSize: [20, 20],
+                      iconAnchor: [10, 10]
+                    });
+                    L.marker([userLat, userLng], {icon: userIcon})
+                      .addTo(map)
+                      .bindPopup('Your Location');
+                    
+                    L.circle([centerLat, centerLng], {
+                      color: 'blue',
+                      fillColor: 'lightblue',
+                      fillOpacity: 0.2,
+                      radius: radius
+                    }).addTo(map);
+                    
+                    const group = new L.featureGroup([
+                      L.marker([centerLat, centerLng]),
+                      L.marker([userLat, userLng])
+                    ]);
+                    map.fitBounds(group.getBounds().pad(0.1));
+                  </script>
+                </body>
+                </html>
+              `
+            }}
+          />
+        ) : (
+          <View style={styles.mapErrorContainer}>
+            <Text style={styles.mapErrorText}>Unable to load map</Text>
+          </View>
+        )}
+      </View>
+    </View>
+  );
+}
+
+// Styles remain exactly the same
+const { width, height } = Dimensions.get('window');
+
+const styles = StyleSheet.create({
+  // ... all your existing styles remain unchanged
+});
