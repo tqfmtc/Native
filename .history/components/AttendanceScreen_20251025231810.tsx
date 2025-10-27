@@ -1,28 +1,27 @@
 import * as Location from 'expo-location';
 import React, { useEffect, useState } from 'react';
 import {
-  ActivityIndicator,
-  Alert,
-  Dimensions,
-  StyleSheet,
-  Text,
-  TouchableOpacity,
-  View,
-  Animated,
+    ActivityIndicator,
+    Alert,
+    Dimensions,
+    StyleSheet,
+    Text,
+    TouchableOpacity,
+    View,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { APP_CONFIG } from '../constants/config';
-import {
-  Announcement,
-  getAnnouncements,
-  getRecentAttendance,
-  getButtonStatus,
-  LoginResponse,
-  markAttendance
+import { 
+    Announcement, 
+    getAnnouncements, 
+    getRecentAttendance, 
+    getButtonStatus,
+    LoginResponse, 
+    markAttendance 
 } from '../utils/api';
 import { calculateDistance, isWithinRadius, LocationCoords } from '../utils/location';
 import { clearStoredCredentials } from '../utils/storage';
-import SideBar from './SideBar';
+import SideBar from './SideBar'; // Import your existing SideBar component
 
 interface AttendanceScreenProps {
   userData: LoginResponse;
@@ -36,33 +35,8 @@ export default function AttendanceScreen({ userData, onLogout }: AttendanceScree
   const [locationLoading, setLocationLoading] = useState(true);
   const [buttonEnabled, setButtonEnabled] = useState(true);
   const [checkingButtonStatus, setCheckingButtonStatus] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false); // New state for sidebar
 
-  // Sidebar state + animation (from 2nd code)
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const sidebarAnim = useState(new Animated.Value(-280))[0]; // width + a bit for shadow
-
-  const openSidebar = () => {
-    setSidebarOpen(true);
-    Animated.timing(sidebarAnim, {
-      toValue: 0,
-      duration: 280,
-      useNativeDriver: false,
-    }).start();
-  };
-
-  const closeSidebar = () => {
-    Animated.timing(sidebarAnim, {
-      toValue: -280,
-      duration: 260,
-      useNativeDriver: false,
-    }).start(() => setSidebarOpen(false));
-  };
-
-  const toggleSidebar = () => {
-    if (sidebarOpen) closeSidebar(); else openSidebar();
-  };
-
-  // Mount effects (shared)
   useEffect(() => {
     getCurrentLocation();
     checkTodayAttendance();
@@ -70,6 +44,17 @@ export default function AttendanceScreen({ userData, onLogout }: AttendanceScree
     showLatestAnnouncement();
   }, []);
 
+  // Toggle sidebar function
+  const toggleSidebar = () => {
+    setIsSidebarOpen(!isSidebarOpen);
+  };
+
+  // Close sidebar when clicking outside
+  const closeSidebar = () => {
+    setIsSidebarOpen(false);
+  };
+
+  // New function to check button status from API
   const checkButtonStatus = async () => {
     try {
       setCheckingButtonStatus(true);
@@ -83,6 +68,7 @@ export default function AttendanceScreen({ userData, onLogout }: AttendanceScree
     }
   };
 
+  // Check if today's attendance already exists and update UI
   const checkTodayAttendance = async () => {
     try {
       const recent = await getRecentAttendance(userData.token);
@@ -94,6 +80,7 @@ export default function AttendanceScreen({ userData, onLogout }: AttendanceScree
     }
   };
 
+  // Always show the latest announcement on entering dashboard
   const showLatestAnnouncement = async () => {
     try {
       const list: Announcement[] = await getAnnouncements(userData.token);
@@ -133,11 +120,13 @@ export default function AttendanceScreen({ userData, onLogout }: AttendanceScree
   };
 
   const handleMarkAttendance = async () => {
+    // Check if button is disabled by admin first
     if (!buttonEnabled) {
       Alert.alert('Attendance Disabled', 'Attendance has been disabled by the administrator');
       return;
     }
 
+    // Check for Sunday
     if (new Date().getDay() === 0) {
       Alert.alert('Attendance Disabled', 'Sunday attendance is disabled');
       return;
@@ -176,11 +165,14 @@ export default function AttendanceScreen({ userData, onLogout }: AttendanceScree
       if (resp?.message === 'Attendance submitted successfully') {
         setAttendanceMarked(true);
         Alert.alert('Success', 'Attendance marked successfully');
-      } else if (resp?.message === 'Attendance disabled by Admin') {
+      } 
+      else if(resp?.message==='Attendance disabled by Admin'){
         Alert.alert('Attendance Disabled', 'Attendance marking has been disabled by the ADMIN.');
-      } else if (resp?.message === 'Attendance only allowed at respective time') {
-        Alert.alert('Attendance not allowed', `Attendance can only be marked during ${resp.assignedTime}.`);
-      } else {
+      }
+      else if(resp?.message==='Attendance only allowed at respective time'){
+        Alert.alert('Attendance not allowed', 'Attendance can only be marked during ${resp.assignedTime}.');
+      }
+      else {
         setAttendanceMarked(true);
         Alert.alert('Success', resp?.message || 'Attendance marked successfully');
       }
@@ -241,40 +233,45 @@ export default function AttendanceScreen({ userData, onLogout }: AttendanceScree
     });
   };
 
+  // Hamburger Menu Component
+  const HamburgerMenu = () => (
+    <TouchableOpacity style={styles.hamburgerButton} onPress={toggleSidebar}>
+      <View style={[styles.hamburgerLine, isSidebarOpen && styles.hamburgerLineActive1]} />
+      <View style={[styles.hamburgerLine, isSidebarOpen && styles.hamburgerLineActive2]} />
+      <View style={[styles.hamburgerLine, isSidebarOpen && styles.hamburgerLineActive3]} />
+    </TouchableOpacity>
+  );
+
   return (
     <View style={styles.container}>
-      {/* Sidebar overlay and panel (from 2nd code) */}
-      {sidebarOpen && (
-        <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={closeSidebar} />
+      {/* Sidebar Overlay */}
+      {isSidebarOpen && (
+        <TouchableOpacity 
+          style={styles.overlay} 
+          activeOpacity={1} 
+          onPress={closeSidebar}
+        />
       )}
-      <Animated.View style={[styles.sidebarContainer, { left: sidebarAnim }]}>
-        {/* Use your existing SideBar; forward onClose to closeSidebar */}
-        <SideBar onClose={closeSidebar} userData={userData} onLogout={onLogout} />
-      </Animated.View>
 
-      {/* Header: left (3D hamburger), center (texts), right (logout) - from 1st code layout */}
+      {/* Sidebar Component */}
+      <SideBar
+        isVisible={isSidebarOpen}
+        onClose={closeSidebar}
+        userData={userData}
+        onLogout={onLogout}
+      />
+
+      {/* Header with Hamburger Menu */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
-          <TouchableOpacity
-            style={styles.hamburgerButton3D}
-            onPress={openSidebar}
-            activeOpacity={0.8}
-          >
-            <View style={styles.hamburgerButtonInner}>
-              <View style={styles.hamburgerLine} />
-              <View style={styles.hamburgerLine} />
-              <View style={styles.hamburgerLine} />
-            </View>
-          </TouchableOpacity>
+          <HamburgerMenu />
         </View>
-
         <View style={styles.headerContent}>
           <Text style={styles.date}>{formatDate()}</Text>
           <Text style={styles.time}>{formatTime()}</Text>
           <Text style={styles.centerName}>Center: {userData.assignedCenter?.name || 'No Center Assigned'}</Text>
           <Text style={styles.username}> Welcome {userData.name || 'Guest'}</Text>
         </View>
-
         <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
           <Text style={styles.logoutButtonText}>Logout</Text>
         </TouchableOpacity>
@@ -296,16 +293,16 @@ export default function AttendanceScreen({ userData, onLogout }: AttendanceScree
             <ActivityIndicator size="large" color="#fff" />
           ) : (
             <Text style={styles.attendanceButtonText}>
-              {!buttonEnabled
-                ? 'Attendance Disabled by Admin'
-                : attendanceMarked
-                ? 'Attendance Marked Successfully'
+              {!buttonEnabled 
+                ? 'Attendance Disabled by Admin' 
+                : attendanceMarked 
+                ? 'Attendance Marked Successfully' 
                 : 'Mark Attendance'
               }
             </Text>
           )}
         </TouchableOpacity>
-
+        
         {currentLocation && userData?.assignedCenter && (
           <View style={styles.distanceInfo}>
             <Text style={styles.distanceText}>
@@ -324,7 +321,7 @@ export default function AttendanceScreen({ userData, onLogout }: AttendanceScree
         )}
       </View>
 
-      {/* Map */}
+      {/* Map section - unchanged */}
       <View style={styles.mapContainer}>
         {locationLoading ? (
           <View style={styles.mapLoadingContainer}>
@@ -355,13 +352,13 @@ export default function AttendanceScreen({ userData, onLogout }: AttendanceScree
                     const userLat = ${currentLocation.lat};
                     const userLng = ${currentLocation.lng};
                     const radius = ${APP_CONFIG.ATTENDANCE_RADIUS};
-
+                    
                     const map = L.map('map').setView([centerLat, centerLng], 16);
-
+                    
                     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
                       attribution: '© OpenStreetMap contributors'
                     }).addTo(map);
-
+                    
                     const centerIcon = L.divIcon({
                       className: 'custom-div-icon',
                       html: "<div style='background-color: blue; width: 20px; height: 20px; border-radius: 50%; border: 2px solid white;'></div>",
@@ -371,7 +368,7 @@ export default function AttendanceScreen({ userData, onLogout }: AttendanceScree
                     L.marker([centerLat, centerLng], {icon: centerIcon})
                       .addTo(map)
                       .bindPopup('${userData.assignedCenter.name}<br>Center Location');
-
+                    
                     const userIcon = L.divIcon({
                       className: 'custom-div-icon',
                       html: "<div style='background-color: red; width: 20px; height: 20px; border-radius: 50%; border: 2px solid white;'></div>",
@@ -381,14 +378,14 @@ export default function AttendanceScreen({ userData, onLogout }: AttendanceScree
                     L.marker([userLat, userLng], {icon: userIcon})
                       .addTo(map)
                       .bindPopup('Your Location');
-
+                    
                     L.circle([centerLat, centerLng], {
                       color: 'blue',
                       fillColor: 'lightblue',
                       fillOpacity: 0.2,
                       radius: radius
                     }).addTo(map);
-
+                    
                     const group = new L.featureGroup([
                       L.marker([centerLat, centerLng]),
                       L.marker([userLat, userLng])
@@ -410,41 +407,58 @@ export default function AttendanceScreen({ userData, onLogout }: AttendanceScree
   );
 }
 
-const { height } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f5f5f5' },
-
-  // Overlay and animated sidebar (from 2nd code)
+  container: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
+  },
+  // Sidebar styles
   overlay: {
     position: 'absolute',
-    top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    zIndex: 9,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    zIndex: 998,
   },
-  sidebarContainer: {
-    position: 'absolute',
-    top: 0, bottom: 0,
-    width: 280,
-    backgroundColor: '#fff',
-    zIndex: 10,
-    elevation: 12,
-    // optional shadow for iOS
-    shadowColor: '#000',
-    shadowOffset: { width: 2, height: 0 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
+  // Hamburger menu styles
+  hamburgerButton: {
+    width: 30,
+    height: 24,
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 2,
   },
-
-  // Header layout (from 1st code)
+  hamburgerLine: {
+    width: 25,
+    height: 3,
+    backgroundColor: '#333',
+    borderRadius: 2,
+    transition: '0.3s',
+  },
+  hamburgerLineActive1: {
+    transform: [{ rotate: '45deg' }, { translateY: 10.5 }],
+    backgroundColor: '#007AFF',
+  },
+  hamburgerLineActive2: {
+    opacity: 0,
+  },
+  hamburgerLineActive3: {
+    transform: [{ rotate: '-45deg' }, { translateY: -10.5 }],
+    backgroundColor: '#007AFF',
+  },
+  // Updated header styles
   header: {
     backgroundColor: '#fff',
     paddingTop: 50,
     paddingBottom: 20,
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
     flexDirection: 'row',
-    alignItems: 'flex-end',
     justifyContent: 'space-between',
+    alignItems: 'flex-end',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
@@ -452,65 +466,57 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   headerLeft: {
-    width: 56,
-    alignItems: 'flex-start',
-    paddingBottom: 4,
+    justifyContent: 'flex-end',
+    paddingBottom: 10,
   },
   headerContent: {
     flex: 1,
-    paddingHorizontal: 8,
+    marginLeft: 15,
   },
-
-  // 3D Hamburger (from 1st code)
-  hamburgerButton3D: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 8,
-    elevation: 10,
-    backgroundColor: 'transparent',
-  },
-  hamburgerButtonInner: {
+  // Existing styles remain unchanged
+  loadingContainer: {
     flex: 1,
-    backgroundColor: '#007AFF',
-    borderRadius: 12,
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#0056CC',
-    shadowColor: '#003E99',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3,
-    elevation: 6,
   },
-  hamburgerLine: {
-    width: 22,
-    height: 3,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 2,
-    marginVertical: 2,
+  date: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 4,
   },
-
-  // Text styles
-  date: { fontSize: 18, fontWeight: '600', color: '#333', marginBottom: 4 },
-  time: { fontSize: 16, color: '#666', marginBottom: 8 },
-  centerName: { fontSize: 16, fontWeight: '500', color: '#007AFF' },
-  username: { fontSize: 16, fontWeight: '500', color: '#f70d01ff' },
-
+  time: {
+    fontSize: 16,
+    color: '#666',
+    marginBottom: 8,
+  },
+  centerName: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#007AFF',
+  },
+  username: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#f70d01ff',
+  },
   logoutButton: {
     backgroundColor: '#FF3B30',
     paddingHorizontal: 15,
     paddingVertical: 8,
     borderRadius: 6,
-    alignSelf: 'flex-end',
   },
-  logoutButtonText: { color: '#fff', fontSize: 14, fontWeight: '600' },
-
-  attendanceContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 40 },
+  logoutButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  attendanceContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 40,
+  },
   attendanceButton: {
     width: 200,
     height: 200,
@@ -524,26 +530,69 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 8,
   },
-  attendanceButtonSunday: { backgroundColor: '#808080' },
-  attendanceButtonMarked: { backgroundColor: '#34C759' },
-  attendanceButtonDisabled: { backgroundColor: '#ccc' },
-  attendanceButtonText: { color: '#fff', fontSize: 18, fontWeight: 'bold', textAlign: 'center', paddingHorizontal: 20 },
-
-  distanceInfo: { marginTop: 20, alignItems: 'center' },
-  distanceText: { fontSize: 16, fontWeight: '600', color: '#333', marginBottom: 4 },
-  radiusText: { fontSize: 14, color: '#666' },
-
+  attendanceButtonSunday: {
+    backgroundColor: '#808080',
+  },
+  attendanceButtonMarked: {
+    backgroundColor: '#34C759',
+  },
+  attendanceButtonDisabled: {
+    backgroundColor: '#ccc',
+  },
+  attendanceButtonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    paddingHorizontal: 20,
+  },
+  distanceInfo: {
+    marginTop: 20,
+    alignItems: 'center',
+  },
+  distanceText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 4,
+  },
+  radiusText: {
+    fontSize: 14,
+    color: '#666',
+  },
   mapContainer: {
     height: height * 0.4,
     margin: 20,
     borderRadius: 10,
     overflow: 'hidden',
-    backgroundColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
     elevation: 3,
   },
-  map: { flex: 1 },
-  mapLoadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' },
-  mapLoadingText: { marginTop: 10, fontSize: 16, color: '#666' },
-  mapErrorContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' },
-  mapErrorText: { fontSize: 16, color: '#666' },
+  map: {
+    flex: 1,
+  },
+  mapLoadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+  },
+  mapLoadingText: {
+    marginTop: 10,
+    fontSize: 16,
+    color: '#666',
+  },
+  mapErrorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+  },
+  mapErrorText: {
+    fontSize: 16,
+    color: '#666',
+  },
 });

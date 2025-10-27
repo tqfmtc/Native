@@ -8,7 +8,6 @@ import {
   Text,
   TouchableOpacity,
   View,
-  Animated,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { APP_CONFIG } from '../constants/config';
@@ -29,6 +28,8 @@ interface AttendanceScreenProps {
   onLogout: () => void;
 }
 
+const { width, height } = Dimensions.get('window');
+
 export default function AttendanceScreen({ userData, onLogout }: AttendanceScreenProps) {
   const [currentLocation, setCurrentLocation] = useState<LocationCoords | null>(null);
   const [attendanceMarked, setAttendanceMarked] = useState(false);
@@ -36,33 +37,8 @@ export default function AttendanceScreen({ userData, onLogout }: AttendanceScree
   const [locationLoading, setLocationLoading] = useState(true);
   const [buttonEnabled, setButtonEnabled] = useState(true);
   const [checkingButtonStatus, setCheckingButtonStatus] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
-  // Sidebar state + animation (from 2nd code)
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const sidebarAnim = useState(new Animated.Value(-280))[0]; // width + a bit for shadow
-
-  const openSidebar = () => {
-    setSidebarOpen(true);
-    Animated.timing(sidebarAnim, {
-      toValue: 0,
-      duration: 280,
-      useNativeDriver: false,
-    }).start();
-  };
-
-  const closeSidebar = () => {
-    Animated.timing(sidebarAnim, {
-      toValue: -280,
-      duration: 260,
-      useNativeDriver: false,
-    }).start(() => setSidebarOpen(false));
-  };
-
-  const toggleSidebar = () => {
-    if (sidebarOpen) closeSidebar(); else openSidebar();
-  };
-
-  // Mount effects (shared)
   useEffect(() => {
     getCurrentLocation();
     checkTodayAttendance();
@@ -176,11 +152,14 @@ export default function AttendanceScreen({ userData, onLogout }: AttendanceScree
       if (resp?.message === 'Attendance submitted successfully') {
         setAttendanceMarked(true);
         Alert.alert('Success', 'Attendance marked successfully');
-      } else if (resp?.message === 'Attendance disabled by Admin') {
+      }
+      else if (resp?.message === 'Attendance disabled by Admin') {
         Alert.alert('Attendance Disabled', 'Attendance marking has been disabled by the ADMIN.');
-      } else if (resp?.message === 'Attendance only allowed at respective time') {
-        Alert.alert('Attendance not allowed', `Attendance can only be marked during ${resp.assignedTime}.`);
-      } else {
+      }
+      else if (resp?.message === 'Attendance only allowed at respective time') {
+        Alert.alert('Attendance not allowed', 'Attendance can only be marked during ${resp.assignedTime}.');
+      }
+      else {
         setAttendanceMarked(true);
         Alert.alert('Success', resp?.message || 'Attendance marked successfully');
       }
@@ -243,21 +222,13 @@ export default function AttendanceScreen({ userData, onLogout }: AttendanceScree
 
   return (
     <View style={styles.container}>
-      {/* Sidebar overlay and panel (from 2nd code) */}
-      {sidebarOpen && (
-        <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={closeSidebar} />
-      )}
-      <Animated.View style={[styles.sidebarContainer, { left: sidebarAnim }]}>
-        {/* Use your existing SideBar; forward onClose to closeSidebar */}
-        <SideBar onClose={closeSidebar} userData={userData} onLogout={onLogout} />
-      </Animated.View>
 
-      {/* Header: left (3D hamburger), center (texts), right (logout) - from 1st code layout */}
+      {/* Header: left (hamburger), center (texts), right (logout) */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <TouchableOpacity
             style={styles.hamburgerButton3D}
-            onPress={openSidebar}
+            onPress={() => setIsSidebarOpen(true)}
             activeOpacity={0.8}
           >
             <View style={styles.hamburgerButtonInner}>
@@ -280,163 +251,166 @@ export default function AttendanceScreen({ userData, onLogout }: AttendanceScree
         </TouchableOpacity>
       </View>
 
-      {/* Attendance Button */}
-      <View style={styles.attendanceContainer}>
-        <TouchableOpacity
-          style={[
-            styles.attendanceButton,
-            new Date().getDay() === 0 && styles.attendanceButtonSunday,
-            attendanceMarked && styles.attendanceButtonMarked,
-            (loading || !buttonEnabled || checkingButtonStatus) && styles.attendanceButtonDisabled,
-          ]}
-          onPress={handleMarkAttendance}
-          disabled={loading || attendanceMarked || !buttonEnabled || checkingButtonStatus}
-        >
-          {loading || checkingButtonStatus ? (
-            <ActivityIndicator size="large" color="#fff" />
-          ) : (
-            <Text style={styles.attendanceButtonText}>
-              {!buttonEnabled
-                ? 'Attendance Disabled by Admin'
-                : attendanceMarked
-                ? 'Attendance Marked Successfully'
-                : 'Mark Attendance'
-              }
-            </Text>
-          )}
-        </TouchableOpacity>
-
-        {currentLocation && userData?.assignedCenter && (
-          <View style={styles.distanceInfo}>
-            <Text style={styles.distanceText}>
-              Distance to center: {Math.round(calculateDistance(
-                currentLocation,
-                {
-                  lat: userData.assignedCenter.coordinates[0],
-                  lng: userData.assignedCenter.coordinates[1],
+      {/* Main content is made non-interactive when sidebar is open to prevent touch bleed */}
+      <View pointerEvents={isSidebarOpen ? 'none' : 'auto'} style={{ flex: 1 }}>
+        {/* Attendance Button */}
+        <View style={styles.attendanceContainer}>
+          <TouchableOpacity
+            style={[
+              styles.attendanceButton,
+              new Date().getDay() === 0 && styles.attendanceButtonSunday,
+              attendanceMarked && styles.attendanceButtonMarked,
+              (loading || !buttonEnabled || checkingButtonStatus) && styles.attendanceButtonDisabled,
+            ]}
+            onPress={handleMarkAttendance}
+            disabled={loading || attendanceMarked || !buttonEnabled || checkingButtonStatus}
+          >
+            {loading || checkingButtonStatus ? (
+              <ActivityIndicator size="large" color="#fff" />
+            ) : (
+              <Text style={styles.attendanceButtonText}>
+                {!buttonEnabled
+                  ? 'Attendance Disabled by Admin'
+                  : attendanceMarked
+                  ? 'Attendance Marked Successfully'
+                  : 'Mark Attendance'
                 }
-              ))}m
-            </Text>
-            <Text style={styles.radiusText}>
-              Required: Within {APP_CONFIG.ATTENDANCE_RADIUS}m
-            </Text>
-          </View>
-        )}
+              </Text>
+            )}
+          </TouchableOpacity>
+
+          {currentLocation && userData?.assignedCenter && (
+            <View style={styles.distanceInfo}>
+              <Text style={styles.distanceText}>
+                Distance to center: {Math.round(calculateDistance(
+                  currentLocation,
+                  {
+                    lat: userData.assignedCenter.coordinates[0],
+                    lng: userData.assignedCenter.coordinates[1],
+                  }
+                ))}m
+              </Text>
+              <Text style={styles.radiusText}>
+                Required: Within {APP_CONFIG.ATTENDANCE_RADIUS}m
+              </Text>
+            </View>
+          )}
+        </View>
+
+        {/* Map */}
+        <View style={[styles.mapContainer, isSidebarOpen && { opacity: 0.999 }]}>
+          {locationLoading ? (
+            <View style={styles.mapLoadingContainer}>
+              <ActivityIndicator size="large" color="#007AFF" />
+              <Text style={styles.mapLoadingText}>Loading map...</Text>
+            </View>
+          ) : currentLocation && userData.assignedCenter ? (
+            <WebView
+              style={styles.map}
+              source={{
+                html: `
+                  <!DOCTYPE html>
+                  <html>
+                  <head>
+                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+                    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+                    <style>
+                      body { margin: 0; padding: 0; }
+                      #map { height: 100vh; width: 100vw; }
+                    </style>
+                  </head>
+                  <body>
+                    <div id="map"></div>
+                    <script>
+                      const centerLat = ${userData.assignedCenter.coordinates[0]};
+                      const centerLng = ${userData.assignedCenter.coordinates[1]};
+                      const userLat = ${currentLocation.lat};
+                      const userLng = ${currentLocation.lng};
+                      const radius = ${APP_CONFIG.ATTENDANCE_RADIUS};
+
+                      const map = L.map('map').setView([centerLat, centerLng], 16);
+
+                      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                        attribution: '© OpenStreetMap contributors'
+                      }).addTo(map);
+
+                      const centerIcon = L.divIcon({
+                        className: 'custom-div-icon',
+                        html: "<div style='background-color: blue; width: 20px; height: 20px; border-radius: 50%; border: 2px solid white;'></div>",
+                        iconSize: [20, 20],
+                        iconAnchor: [10, 10]
+                      });
+                      L.marker([centerLat, centerLng], {icon: centerIcon})
+                        .addTo(map)
+                        .bindPopup('${userData.assignedCenter.name}<br>Center Location');
+
+                      const userIcon = L.divIcon({
+                        className: 'custom-div-icon',
+                        html: "<div style='background-color: red; width: 20px; height: 20px; border-radius: 50%; border: 2px solid white;'></div>",
+                        iconSize: [20, 20],
+                        iconAnchor: [10, 10]
+                      });
+                      L.marker([userLat, userLng], {icon: userIcon})
+                        .addTo(map)
+                        .bindPopup('Your Location');
+
+                      L.circle([centerLat, centerLng], {
+                        color: 'blue',
+                        fillColor: 'lightblue',
+                        fillOpacity: 0.2,
+                        radius: radius
+                      }).addTo(map);
+
+                      const group = new L.featureGroup([
+                        L.marker([centerLat, centerLng]),
+                        L.marker([userLat, userLng])
+                      ]);
+                      map.fitBounds(group.getBounds().pad(0.1));
+                    </script>
+                  </body>
+                  </html>
+                `
+              }}
+            />
+          ) : (
+            <View style={styles.mapErrorContainer}>
+              <Text style={styles.mapErrorText}>Unable to load map</Text>
+            </View>
+          )}
+        </View>
       </View>
 
-      {/* Map */}
-      <View style={styles.mapContainer}>
-        {locationLoading ? (
-          <View style={styles.mapLoadingContainer}>
-            <ActivityIndicator size="large" color="#007AFF" />
-            <Text style={styles.mapLoadingText}>Loading map...</Text>
-          </View>
-        ) : currentLocation && userData.assignedCenter ? (
-          <WebView
-            style={styles.map}
-            source={{
-              html: `
-                <!DOCTYPE html>
-                <html>
-                <head>
-                  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-                  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-                  <style>
-                    body { margin: 0; padding: 0; }
-                    #map { height: 100vh; width: 100vw; }
-                  </style>
-                </head>
-                <body>
-                  <div id="map"></div>
-                  <script>
-                    const centerLat = ${userData.assignedCenter.coordinates[0]};
-                    const centerLng = ${userData.assignedCenter.coordinates[1]};
-                    const userLat = ${currentLocation.lat};
-                    const userLng = ${currentLocation.lng};
-                    const radius = ${APP_CONFIG.ATTENDANCE_RADIUS};
-
-                    const map = L.map('map').setView([centerLat, centerLng], 16);
-
-                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-                      attribution: '© OpenStreetMap contributors'
-                    }).addTo(map);
-
-                    const centerIcon = L.divIcon({
-                      className: 'custom-div-icon',
-                      html: "<div style='background-color: blue; width: 20px; height: 20px; border-radius: 50%; border: 2px solid white;'></div>",
-                      iconSize: [20, 20],
-                      iconAnchor: [10, 10]
-                    });
-                    L.marker([centerLat, centerLng], {icon: centerIcon})
-                      .addTo(map)
-                      .bindPopup('${userData.assignedCenter.name}<br>Center Location');
-
-                    const userIcon = L.divIcon({
-                      className: 'custom-div-icon',
-                      html: "<div style='background-color: red; width: 20px; height: 20px; border-radius: 50%; border: 2px solid white;'></div>",
-                      iconSize: [20, 20],
-                      iconAnchor: [10, 10]
-                    });
-                    L.marker([userLat, userLng], {icon: userIcon})
-                      .addTo(map)
-                      .bindPopup('Your Location');
-
-                    L.circle([centerLat, centerLng], {
-                      color: 'blue',
-                      fillColor: 'lightblue',
-                      fillOpacity: 0.2,
-                      radius: radius
-                    }).addTo(map);
-
-                    const group = new L.featureGroup([
-                      L.marker([centerLat, centerLng]),
-                      L.marker([userLat, userLng])
-                    ]);
-                    map.fitBounds(group.getBounds().pad(0.1));
-                  </script>
-                </body>
-                </html>
-              `
-            }}
+      {/* Dedicated overlay layer above everything to avoid WebView/zIndex glitches */}
+      <View
+        pointerEvents={isSidebarOpen ? 'auto' : 'none'}
+        style={[styles.overlayLayer, isSidebarOpen ? styles.overlayVisible : styles.overlayHidden]}
+      >
+        <TouchableOpacity
+          activeOpacity={1}
+          style={styles.backdrop}
+          onPress={() => setIsSidebarOpen(false)}
+        />
+        <View style={styles.sidebarPanel}>
+          <SideBar
+            isVisible={true}
+            onClose={() => setIsSidebarOpen(false)}
+            userData={userData}
+            onLogout={onLogout}
           />
-        ) : (
-          <View style={styles.mapErrorContainer}>
-            <Text style={styles.mapErrorText}>Unable to load map</Text>
-          </View>
-        )}
+        </View>
       </View>
     </View>
   );
 }
 
-const { height } = Dimensions.get('window');
-
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f5f5f5' },
-
-  // Overlay and animated sidebar (from 2nd code)
-  overlay: {
-    position: 'absolute',
-    top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    zIndex: 9,
-  },
-  sidebarContainer: {
-    position: 'absolute',
-    top: 0, bottom: 0,
-    width: 280,
-    backgroundColor: '#fff',
-    zIndex: 10,
-    elevation: 12,
-    // optional shadow for iOS
-    shadowColor: '#000',
-    shadowOffset: { width: 2, height: 0 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
+  container: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
   },
 
-  // Header layout (from 1st code)
+  // Header layout: left (button), center (texts), right (logout)
   header: {
     backgroundColor: '#fff',
     paddingTop: 50,
@@ -461,7 +435,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
 
-  // 3D Hamburger (from 1st code)
+  // 3D Hamburger
   hamburgerButton3D: {
     width: 44,
     height: 44,
@@ -495,12 +469,6 @@ const styles = StyleSheet.create({
     marginVertical: 2,
   },
 
-  // Text styles
-  date: { fontSize: 18, fontWeight: '600', color: '#333', marginBottom: 4 },
-  time: { fontSize: 16, color: '#666', marginBottom: 8 },
-  centerName: { fontSize: 16, fontWeight: '500', color: '#007AFF' },
-  username: { fontSize: 16, fontWeight: '500', color: '#f70d01ff' },
-
   logoutButton: {
     backgroundColor: '#FF3B30',
     paddingHorizontal: 15,
@@ -508,9 +476,18 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     alignSelf: 'flex-end',
   },
-  logoutButtonText: { color: '#fff', fontSize: 14, fontWeight: '600' },
+  logoutButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
 
-  attendanceContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 40 },
+  attendanceContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 40,
+    paddingTop: 16,
+  },
   attendanceButton: {
     width: 200,
     height: 200,
@@ -524,26 +501,101 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 8,
   },
-  attendanceButtonSunday: { backgroundColor: '#808080' },
-  attendanceButtonMarked: { backgroundColor: '#34C759' },
-  attendanceButtonDisabled: { backgroundColor: '#ccc' },
-  attendanceButtonText: { color: '#fff', fontSize: 18, fontWeight: 'bold', textAlign: 'center', paddingHorizontal: 20 },
-
-  distanceInfo: { marginTop: 20, alignItems: 'center' },
-  distanceText: { fontSize: 16, fontWeight: '600', color: '#333', marginBottom: 4 },
-  radiusText: { fontSize: 14, color: '#666' },
+  attendanceButtonSunday: {
+    backgroundColor: '#808080',
+  },
+  attendanceButtonMarked: {
+    backgroundColor: '#34C759',
+  },
+  attendanceButtonDisabled: {
+    backgroundColor: '#ccc',
+  },
+  attendanceButtonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    paddingHorizontal: 20,
+  },
+  distanceInfo: {
+    marginTop: 20,
+    alignItems: 'center',
+  },
+  distanceText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 4,
+  },
+  radiusText: {
+    fontSize: 14,
+    color: '#666',
+  },
 
   mapContainer: {
     height: height * 0.4,
     margin: 20,
     borderRadius: 10,
     overflow: 'hidden',
-    backgroundColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
     elevation: 3,
   },
-  map: { flex: 1 },
-  mapLoadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' },
-  mapLoadingText: { marginTop: 10, fontSize: 16, color: '#666' },
-  mapErrorContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' },
-  mapErrorText: { fontSize: 16, color: '#666' },
+  map: {
+    flex: 1,
+  },
+  mapLoadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+  },
+  mapLoadingText: {
+    marginTop: 10,
+    fontSize: 16,
+    color: '#666',
+  },
+  mapErrorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+  },
+  mapErrorText: {
+    fontSize: 16,
+    color: '#666',
+  },
+
+  // Overlay layer always mounted at top, only visible when open
+  overlayLayer: {
+    position: 'absolute',
+    top: 0, right: 0, bottom: 0, left: 0,
+    zIndex: 9999,
+  },
+  overlayHidden: {
+    opacity: 0,
+  },
+  overlayVisible: {
+    opacity: 1,
+  },
+  backdrop: {
+    position: 'absolute',
+    top: 0, right: 0, bottom: 0, left: 0,
+    backgroundColor: 'rgba(0,0,0,0.35)',
+  },
+  sidebarPanel: {
+    position: 'absolute',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    width: Math.min(320, Math.round(width * 0.8)),
+    backgroundColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.3,
+    shadowRadius: 12,
+    elevation: 20,
+  },
 });

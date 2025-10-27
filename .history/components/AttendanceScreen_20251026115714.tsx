@@ -8,7 +8,6 @@ import {
   Text,
   TouchableOpacity,
   View,
-  Animated,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { APP_CONFIG } from '../constants/config';
@@ -36,33 +35,8 @@ export default function AttendanceScreen({ userData, onLogout }: AttendanceScree
   const [locationLoading, setLocationLoading] = useState(true);
   const [buttonEnabled, setButtonEnabled] = useState(true);
   const [checkingButtonStatus, setCheckingButtonStatus] = useState(true);
+  const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
-  // Sidebar state + animation (from 2nd code)
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const sidebarAnim = useState(new Animated.Value(-280))[0]; // width + a bit for shadow
-
-  const openSidebar = () => {
-    setSidebarOpen(true);
-    Animated.timing(sidebarAnim, {
-      toValue: 0,
-      duration: 280,
-      useNativeDriver: false,
-    }).start();
-  };
-
-  const closeSidebar = () => {
-    Animated.timing(sidebarAnim, {
-      toValue: -280,
-      duration: 260,
-      useNativeDriver: false,
-    }).start(() => setSidebarOpen(false));
-  };
-
-  const toggleSidebar = () => {
-    if (sidebarOpen) closeSidebar(); else openSidebar();
-  };
-
-  // Mount effects (shared)
   useEffect(() => {
     getCurrentLocation();
     checkTodayAttendance();
@@ -176,11 +150,14 @@ export default function AttendanceScreen({ userData, onLogout }: AttendanceScree
       if (resp?.message === 'Attendance submitted successfully') {
         setAttendanceMarked(true);
         Alert.alert('Success', 'Attendance marked successfully');
-      } else if (resp?.message === 'Attendance disabled by Admin') {
+      }
+      else if (resp?.message === 'Attendance disabled by Admin') {
         Alert.alert('Attendance Disabled', 'Attendance marking has been disabled by the ADMIN.');
-      } else if (resp?.message === 'Attendance only allowed at respective time') {
-        Alert.alert('Attendance not allowed', `Attendance can only be marked during ${resp.assignedTime}.`);
-      } else {
+      }
+      else if (resp?.message === 'Attendance only allowed at respective time') {
+        Alert.alert('Attendance not allowed', 'Attendance can only be marked during ${resp.assignedTime}.');
+      }
+      else {
         setAttendanceMarked(true);
         Alert.alert('Success', resp?.message || 'Attendance marked successfully');
       }
@@ -243,21 +220,22 @@ export default function AttendanceScreen({ userData, onLogout }: AttendanceScree
 
   return (
     <View style={styles.container}>
-      {/* Sidebar overlay and panel (from 2nd code) */}
-      {sidebarOpen && (
-        <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={closeSidebar} />
+      {/* Sidebar */}
+      {isSidebarOpen && (
+        <SideBar
+          isVisible={isSidebarOpen}
+          onClose={() => setIsSidebarOpen(false)}
+          userData={userData}
+          onLogout={onLogout}
+        />
       )}
-      <Animated.View style={[styles.sidebarContainer, { left: sidebarAnim }]}>
-        {/* Use your existing SideBar; forward onClose to closeSidebar */}
-        <SideBar onClose={closeSidebar} userData={userData} onLogout={onLogout} />
-      </Animated.View>
 
-      {/* Header: left (3D hamburger), center (texts), right (logout) - from 1st code layout */}
+      {/* Header: left (hamburger), center (texts), right (logout) */}
       <View style={styles.header}>
         <View style={styles.headerLeft}>
           <TouchableOpacity
             style={styles.hamburgerButton3D}
-            onPress={openSidebar}
+            onPress={() => setIsSidebarOpen(true)}
             activeOpacity={0.8}
           >
             <View style={styles.hamburgerButtonInner}>
@@ -410,33 +388,15 @@ export default function AttendanceScreen({ userData, onLogout }: AttendanceScree
   );
 }
 
-const { height } = Dimensions.get('window');
+const { width, height } = Dimensions.get('window');
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#f5f5f5' },
-
-  // Overlay and animated sidebar (from 2nd code)
-  overlay: {
-    position: 'absolute',
-    top: 0, left: 0, right: 0, bottom: 0,
-    backgroundColor: 'rgba(0,0,0,0.4)',
-    zIndex: 9,
-  },
-  sidebarContainer: {
-    position: 'absolute',
-    top: 0, bottom: 0,
-    width: 280,
-    backgroundColor: '#fff',
-    zIndex: 10,
-    elevation: 12,
-    // optional shadow for iOS
-    shadowColor: '#000',
-    shadowOffset: { width: 2, height: 0 },
-    shadowOpacity: 0.25,
-    shadowRadius: 8,
+  container: {
+    flex: 1,
+    backgroundColor: '#f5f5f5',
   },
 
-  // Header layout (from 1st code)
+  // Header layout: left (button), center (texts), right (logout)
   header: {
     backgroundColor: '#fff',
     paddingTop: 50,
@@ -461,7 +421,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
 
-  // 3D Hamburger (from 1st code)
+  // 3D Hamburger
   hamburgerButton3D: {
     width: 44,
     height: 44,
@@ -489,17 +449,34 @@ const styles = StyleSheet.create({
   },
   hamburgerLine: {
     width: 22,
-    height: 3,
+    height: 1,
     backgroundColor: '#FFFFFF',
     borderRadius: 2,
     marginVertical: 2,
   },
 
   // Text styles
-  date: { fontSize: 18, fontWeight: '600', color: '#333', marginBottom: 4 },
-  time: { fontSize: 16, color: '#666', marginBottom: 8 },
-  centerName: { fontSize: 16, fontWeight: '500', color: '#007AFF' },
-  username: { fontSize: 16, fontWeight: '500', color: '#f70d01ff' },
+  date: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 4,
+  },
+  time: {
+    fontSize: 16,
+    color: '#666',
+    marginBottom: 8,
+  },
+  centerName: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#007AFF',
+  },
+  username: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#f70d01ff',
+  },
 
   logoutButton: {
     backgroundColor: '#FF3B30',
@@ -508,9 +485,18 @@ const styles = StyleSheet.create({
     borderRadius: 6,
     alignSelf: 'flex-end',
   },
-  logoutButtonText: { color: '#fff', fontSize: 14, fontWeight: '600' },
+  logoutButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+  },
 
-  attendanceContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 40 },
+  attendanceContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: 40,
+  },
   attendanceButton: {
     width: 200,
     height: 200,
@@ -524,26 +510,69 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 8,
   },
-  attendanceButtonSunday: { backgroundColor: '#808080' },
-  attendanceButtonMarked: { backgroundColor: '#34C759' },
-  attendanceButtonDisabled: { backgroundColor: '#ccc' },
-  attendanceButtonText: { color: '#fff', fontSize: 18, fontWeight: 'bold', textAlign: 'center', paddingHorizontal: 20 },
-
-  distanceInfo: { marginTop: 20, alignItems: 'center' },
-  distanceText: { fontSize: 16, fontWeight: '600', color: '#333', marginBottom: 4 },
-  radiusText: { fontSize: 14, color: '#666' },
-
+  attendanceButtonSunday: {
+    backgroundColor: '#808080',
+  },
+  attendanceButtonMarked: {
+    backgroundColor: '#34C759',
+  },
+  attendanceButtonDisabled: {
+    backgroundColor: '#ccc',
+  },
+  attendanceButtonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    paddingHorizontal: 20,
+  },
+  distanceInfo: {
+    marginTop: 20,
+    alignItems: 'center',
+  },
+  distanceText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 4,
+  },
+  radiusText: {
+    fontSize: 14,
+    color: '#666',
+  },
   mapContainer: {
     height: height * 0.4,
     margin: 20,
     borderRadius: 10,
     overflow: 'hidden',
-    backgroundColor: '#fff',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
     elevation: 3,
   },
-  map: { flex: 1 },
-  mapLoadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' },
-  mapLoadingText: { marginTop: 10, fontSize: 16, color: '#666' },
-  mapErrorContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' },
-  mapErrorText: { fontSize: 16, color: '#666' },
+  map: {
+    flex: 1,
+  },
+  mapLoadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+  },
+  mapLoadingText: {
+    marginTop: 10,
+    fontSize: 16,
+    color: '#666',
+  },
+  mapErrorContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#fff',
+  },
+  mapErrorText: {
+    fontSize: 16,
+    color: '#666',
+  },
 });
