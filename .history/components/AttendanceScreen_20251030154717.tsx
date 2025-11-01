@@ -432,6 +432,7 @@ const styles = StyleSheet.create({
     elevation: 10,
     backgroundColor: 'transparent',
     right:10,
+    down
   },
   hamburgerButtonInner: {
     flex: 1,

@@ -513,18 +513,6 @@ const styles = StyleSheet.create({
   },
   modalBody: { flex: 1 },
   modalTitle: { fontSize: 18, fontWeight: '700', marginBottom: 8, color: '#111' },
-  modalLoading: {
-  flex: 1,
-  justifyContent: 'center',
-  alignItems: 'center',
-  backgroundColor: 'rgba(0,0,0,0.3)',
-},
-modalActions: {
-  flexDirection: 'row',
-  justifyContent: 'flex-end',
-  marginTop: 12,
-  gap: 8,
-},
 
   formRow: { marginBottom: 10 },
   formLabel: { fontSize: 13, color: '#666', marginBottom: 6 },

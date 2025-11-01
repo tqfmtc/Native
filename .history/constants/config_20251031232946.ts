@@ -2,8 +2,8 @@ export const API_CONFIG = {
   BASE_URL: 'https://api.tqfmohallatuitioncenters.in/api',
   ENDPOINTS: {
     TUTOR_LOGIN: '/auth/tutor/login',
-    TUTOR:'/tutors/{:id}',
-    STUDENT: '/students/{:id}',
+    TUTOR:'/tutors/{id}',
+    STUDENTS: '/students/{id',
     BUTTONSTATUS: '/attendance/buttonStatus',
     ATTENDANCE: '/tutors/attendance',
     ATTENDANCE_RECENT: '/attendance/recent',

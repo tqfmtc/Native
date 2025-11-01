@@ -519,12 +519,6 @@ const styles = StyleSheet.create({
   alignItems: 'center',
   backgroundColor: 'rgba(0,0,0,0.3)',
 },
-modalActions: {
-  flexDirection: 'row',
-  justifyContent: 'flex-end',
-  marginTop: 12,
-  gap: 8,
-},
 
   formRow: { marginBottom: 10 },
   formLabel: { fontSize: 13, color: '#666', marginBottom: 6 },

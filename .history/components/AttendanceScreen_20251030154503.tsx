@@ -274,11 +274,7 @@ export default function AttendanceScreen({ userData, onLogout }: AttendanceScree
       {/* Header with menu button */}
       <View style={styles.header}>
         <TouchableOpacity style={styles.hamburgerButton3D} activeOpacity={0.8} onPress={toggleSidebar}>
-           <View style={styles.hamburgerButtonInner}>
-              <View style={styles.hamburgerLine} />
-              <View style={styles.hamburgerLine} />
-              <View style={styles.hamburgerLine} />
-            </View>
+          <Text style={styles.menuIcon}>☰</Text>
         </TouchableOpacity>
         <View style={styles.headerContent}>
           <Text style={styles.date}>{formatDate()}</Text>
@@ -431,7 +427,6 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 10,
     backgroundColor: 'transparent',
-    right:10,
   },
   hamburgerButtonInner: {
     flex: 1,

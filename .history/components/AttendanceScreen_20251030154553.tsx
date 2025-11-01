@@ -431,7 +431,7 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 10,
     backgroundColor: 'transparent',
-    right:10,
+    left:20
   },
   hamburgerButtonInner: {
     flex: 1,

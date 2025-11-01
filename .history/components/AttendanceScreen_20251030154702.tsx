@@ -429,9 +429,9 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.35,
     shadowRadius: 8,
-    elevation: 10,
+    elevation: 100,
     backgroundColor: 'transparent',
-    right:10,
+    right:10
   },
   hamburgerButtonInner: {
     flex: 1,

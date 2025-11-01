@@ -18,18 +18,16 @@ import {
   getRecentAttendance,
   getButtonStatus,
   LoginResponse,
-  markAttendance,
+  markAttendance
 } from '../utils/api';
 import { calculateDistance, isWithinRadius, LocationCoords } from '../utils/location';
 import { clearStoredCredentials } from '../utils/storage';
-import SideBar from './SideBar'; // ✅ Sidebar import
-
+import SideBar from './SideBar';
 
 interface AttendanceScreenProps {
   userData: LoginResponse;
   onLogout: () => void;
 }
-
 
 export default function AttendanceScreen({ userData, onLogout }: AttendanceScreenProps) {
   const [currentLocation, setCurrentLocation] = useState<LocationCoords | null>(null);
@@ -39,38 +37,38 @@ export default function AttendanceScreen({ userData, onLogout }: AttendanceScree
   const [buttonEnabled, setButtonEnabled] = useState(true);
   const [checkingButtonStatus, setCheckingButtonStatus] = useState(true);
 
-
-  // Sidebar state + animation
+  // Sidebar state + animation (from 2nd code)
   const [sidebarOpen, setSidebarOpen] = useState(false);
-  const sidebarAnim = useState(new Animated.Value(-250))[0];
+  const sidebarAnim = useState(new Animated.Value(-280))[0]; // width + a bit for shadow
 
-
-  const toggleSidebar = () => {
-    if (sidebarOpen) {
-      Animated.timing(sidebarAnim, {
-        toValue: -250,
-        duration: 300,
-        useNativeDriver: false,
-      }).start(() => setSidebarOpen(false));
-    } else {
-      setSidebarOpen(true);
-      Animated.timing(sidebarAnim, {
-        toValue: 0,
-        duration: 300,
-        useNativeDriver: false,
-      }).start();
-    }
+  const openSidebar = () => {
+    setSidebarOpen(true);
+    Animated.timing(sidebarAnim, {
+      toValue: 0,
+      duration: 280,
+      useNativeDriver: false,
+    }).start();
   };
 
+  const closeSidebar = () => {
+    Animated.timing(sidebarAnim, {
+      toValue: -280,
+      duration: 260,
+      useNativeDriver: false,
+    }).start(() => setSidebarOpen(false));
+  };
 
-  // Mount effects
+  const toggleSidebar = () => {
+    if (sidebarOpen) closeSidebar(); else openSidebar();
+  };
+
+  // Mount effects (shared)
   useEffect(() => {
     getCurrentLocation();
     checkTodayAttendance();
     checkButtonStatus();
     showLatestAnnouncement();
   }, []);
-
 
   const checkButtonStatus = async () => {
     try {
@@ -85,7 +83,6 @@ export default function AttendanceScreen({ userData, onLogout }: AttendanceScree
     }
   };
 
-
   const checkTodayAttendance = async () => {
     try {
       const recent = await getRecentAttendance(userData.token);
@@ -96,7 +93,6 @@ export default function AttendanceScreen({ userData, onLogout }: AttendanceScree
       console.log('Failed to check recent attendance:', err);
     }
   };
-
 
   const showLatestAnnouncement = async () => {
     try {
@@ -109,9 +105,8 @@ export default function AttendanceScreen({ userData, onLogout }: AttendanceScree
       }
     } catch (e) {
       console.log('Announcements fetch failed:', e);
-      }
+    }
   };
-
 
   const getCurrentLocation = async () => {
     try {
@@ -121,11 +116,9 @@ export default function AttendanceScreen({ userData, onLogout }: AttendanceScree
         return;
       }
 
-
       const location = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.High,
       });
-
 
       setCurrentLocation({
         lat: location.coords.latitude,
@@ -139,34 +132,28 @@ export default function AttendanceScreen({ userData, onLogout }: AttendanceScree
     }
   };
 
-
   const handleMarkAttendance = async () => {
     if (!buttonEnabled) {
       Alert.alert('Attendance Disabled', 'Attendance has been disabled by the administrator');
       return;
     }
 
-
     if (new Date().getDay() === 0) {
       Alert.alert('Attendance Disabled', 'Sunday attendance is disabled');
       return;
     }
-
 
     if (!currentLocation || !userData?.assignedCenter) {
       Alert.alert('Error', 'Location or center data not available');
       return;
     }
 
-
     const centerLocation: LocationCoords = {
       lat: userData.assignedCenter.coordinates[0],
       lng: userData.assignedCenter.coordinates[1],
     };
 
-
     const withinRadius = isWithinRadius(currentLocation, centerLocation, APP_CONFIG.ATTENDANCE_RADIUS);
-
 
     if (!withinRadius) {
       const distance = Math.round(calculateDistance(currentLocation, centerLocation));
@@ -177,16 +164,13 @@ export default function AttendanceScreen({ userData, onLogout }: AttendanceScree
       return;
     }
 
-
     setLoading(true);
     try {
       const coordinates: [number, number] = [currentLocation.lat, currentLocation.lng];
 
-
       if (!Array.isArray(coordinates) || coordinates.length !== 2 || !coordinates.every(coord => typeof coord === 'number' && !isNaN(coord))) {
         throw new Error('Invalid coordinates: ' + JSON.stringify(coordinates));
       }
-
 
       const resp = await markAttendance(coordinates, userData.token);
       if (resp?.message === 'Attendance submitted successfully') {
@@ -220,21 +204,23 @@ export default function AttendanceScreen({ userData, onLogout }: AttendanceScree
     }
   };
 
-
   const handleLogout = async () => {
-    Alert.alert('Logout', 'Are you sure you want to logout?', [
-      { text: 'Cancel', style: 'cancel' },
-      {
-        text: 'Logout',
-        style: 'destructive',
-        onPress: async () => {
-          await clearStoredCredentials();
-          onLogout();
+    Alert.alert(
+      'Logout',
+      'Are you sure you want to logout?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Logout',
+          style: 'destructive',
+          onPress: async () => {
+            await clearStoredCredentials();
+            onLogout();
+          },
         },
-      },
-    ]);
+      ]
+    );
   };
-
 
   const formatDate = () => {
     const now = new Date();
@@ -246,7 +232,6 @@ export default function AttendanceScreen({ userData, onLogout }: AttendanceScree
     });
   };
 
-
   const formatTime = () => {
     const now = new Date();
     return now.toLocaleTimeString('en-US', {
@@ -256,41 +241,44 @@ export default function AttendanceScreen({ userData, onLogout }: AttendanceScree
     });
   };
 
-
   return (
     <View style={styles.container}>
-      {/* Sidebar overlay */}
+      {/* Sidebar overlay and panel (from 2nd code) */}
       {sidebarOpen && (
-        <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={toggleSidebar} />
+        <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={closeSidebar} />
       )}
-
-
-      {/* Animated sidebar */}
       <Animated.View style={[styles.sidebarContainer, { left: sidebarAnim }]}>
-        <SideBar onClose={toggleSidebar} onNavigate={(screen) => console.log('Navigate to', screen)} />
+        {/* Use your existing SideBar; forward onClose to closeSidebar */}
+        <SideBar onClose={closeSidebar} userData={userData} onLogout={onLogout} />
       </Animated.View>
 
-
-      {/* Header with menu button */}
+      {/* Header: left (3D hamburger), center (texts), right (logout) - from 1st code layout */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.hamburgerButton3D} activeOpacity={0.8} onPress={toggleSidebar}>
-           <View style={styles.hamburgerButtonInner}>
+        <View style={styles.headerLeft}>
+          <TouchableOpacity
+            style={styles.hamburgerButton3D}
+            onPress={openSidebar}
+            activeOpacity={0.8}
+          >
+            <View style={styles.hamburgerButtonInner}>
               <View style={styles.hamburgerLine} />
               <View style={styles.hamburgerLine} />
               <View style={styles.hamburgerLine} />
             </View>
-        </TouchableOpacity>
+          </TouchableOpacity>
+        </View>
+
         <View style={styles.headerContent}>
           <Text style={styles.date}>{formatDate()}</Text>
           <Text style={styles.time}>{formatTime()}</Text>
           <Text style={styles.centerName}>Center: {userData.assignedCenter?.name || 'No Center Assigned'}</Text>
-          <Text style={styles.username}>Welcome {userData.name || 'Guest'}</Text>
+          <Text style={styles.username}> Welcome {userData.name || 'Guest'}</Text>
         </View>
+
         <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
           <Text style={styles.logoutButtonText}>Logout</Text>
         </TouchableOpacity>
       </View>
-
 
       {/* Attendance Button */}
       <View style={styles.attendanceContainer}>
@@ -312,29 +300,29 @@ export default function AttendanceScreen({ userData, onLogout }: AttendanceScree
                 ? 'Attendance Disabled by Admin'
                 : attendanceMarked
                 ? 'Attendance Marked Successfully'
-                : 'Mark Attendance'}
+                : 'Mark Attendance'
+              }
             </Text>
           )}
         </TouchableOpacity>
 
-
         {currentLocation && userData?.assignedCenter && (
           <View style={styles.distanceInfo}>
             <Text style={styles.distanceText}>
-              Distance to center:{' '}
-              {Math.round(
-                calculateDistance(currentLocation, {
+              Distance to center: {Math.round(calculateDistance(
+                currentLocation,
+                {
                   lat: userData.assignedCenter.coordinates[0],
                   lng: userData.assignedCenter.coordinates[1],
-                })
-              )}
-              m
+                }
+              ))}m
             </Text>
-            <Text style={styles.radiusText}>Required: Within {APP_CONFIG.ATTENDANCE_RADIUS}m</Text>
+            <Text style={styles.radiusText}>
+              Required: Within {APP_CONFIG.ATTENDANCE_RADIUS}m
+            </Text>
           </View>
         )}
       </View>
-
 
       {/* Map */}
       <View style={styles.mapContainer}>
@@ -354,7 +342,10 @@ export default function AttendanceScreen({ userData, onLogout }: AttendanceScree
                   <meta name="viewport" content="width=device-width, initial-scale=1.0">
                   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
                   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-                  <style>body { margin: 0; } #map { height: 100vh; width: 100vw; }</style>
+                  <style>
+                    body { margin: 0; padding: 0; }
+                    #map { height: 100vh; width: 100vw; }
+                  </style>
                 </head>
                 <body>
                   <div id="map"></div>
@@ -364,15 +355,49 @@ export default function AttendanceScreen({ userData, onLogout }: AttendanceScree
                     const userLat = ${currentLocation.lat};
                     const userLng = ${currentLocation.lng};
                     const radius = ${APP_CONFIG.ATTENDANCE_RADIUS};
+
                     const map = L.map('map').setView([centerLat, centerLng], 16);
-                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(map);
-                    L.marker([centerLat, centerLng]).addTo(map).bindPopup('${userData.assignedCenter.name}');
-                    L.marker([userLat, userLng]).addTo(map).bindPopup('You');
-                    L.circle([centerLat, centerLng], { color: 'blue', fillColor: 'lightblue', fillOpacity: 0.2, radius }).addTo(map);
+
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                      attribution: '© OpenStreetMap contributors'
+                    }).addTo(map);
+
+                    const centerIcon = L.divIcon({
+                      className: 'custom-div-icon',
+                      html: "<div style='background-color: blue; width: 20px; height: 20px; border-radius: 50%; border: 2px solid white;'></div>",
+                      iconSize: [20, 20],
+                      iconAnchor: [10, 10]
+                    });
+                    L.marker([centerLat, centerLng], {icon: centerIcon})
+                      .addTo(map)
+                      .bindPopup('${userData.assignedCenter.name}<br>Center Location');
+
+                    const userIcon = L.divIcon({
+                      className: 'custom-div-icon',
+                      html: "<div style='background-color: red; width: 20px; height: 20px; border-radius: 50%; border: 2px solid white;'></div>",
+                      iconSize: [20, 20],
+                      iconAnchor: [10, 10]
+                    });
+                    L.marker([userLat, userLng], {icon: userIcon})
+                      .addTo(map)
+                      .bindPopup('Your Location');
+
+                    L.circle([centerLat, centerLng], {
+                      color: 'blue',
+                      fillColor: 'lightblue',
+                      fillOpacity: 0.2,
+                      radius: radius
+                    }).addTo(map);
+
+                    const group = new L.featureGroup([
+                      L.marker([centerLat, centerLng]),
+                      L.marker([userLat, userLng])
+                    ]);
+                    map.fitBounds(group.getBounds().pad(0.1));
                   </script>
                 </body>
                 </html>
-              `,
+              `
             }}
           />
         ) : (
@@ -385,41 +410,57 @@ export default function AttendanceScreen({ userData, onLogout }: AttendanceScree
   );
 }
 
-
 const { height } = Dimensions.get('window');
-
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#f5f5f5' },
+
+  // Overlay and animated sidebar (from 2nd code)
   overlay: {
     position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+    top: 0, left: 0, right: 0, bottom: 0,
     backgroundColor: 'rgba(0,0,0,0.4)',
     zIndex: 9,
   },
   sidebarContainer: {
     position: 'absolute',
-    top: 0,
-    bottom: 0,
-    width: 250,
+    top: 0, bottom: 0,
+    width: 280,
     backgroundColor: '#fff',
     zIndex: 10,
-    elevation: 10,
+    elevation: 12,
+    // optional shadow for iOS
+    shadowColor: '#000',
+    shadowOffset: { width: 2, height: 0 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
   },
+
+  // Header layout (from 1st code)
   header: {
     backgroundColor: '#fff',
     paddingTop: 50,
     paddingBottom: 20,
-    paddingHorizontal: 20,
+    paddingHorizontal: 16,
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-end',
     justifyContent: 'space-between',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
     elevation: 3,
   },
-  
+  headerLeft: {
+    width: 56,
+    alignItems: 'flex-start',
+    paddingBottom: 4,
+  },
+  headerContent: {
+    flex: 1,
+    paddingHorizontal: 8,
+  },
+
   // 3D Hamburger (from 1st code)
   hamburgerButton3D: {
     width: 44,
@@ -431,7 +472,6 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 10,
     backgroundColor: 'transparent',
-    right:10,
   },
   hamburgerButtonInner: {
     flex: 1,
@@ -454,20 +494,22 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     marginVertical: 2,
   },
-  menuButton: { marginRight: 10 },
-  menuIcon: { fontSize: 26, color: '#007AFF', fontWeight: 'bold' },
-  headerContent: { flex: 1 },
+
+  // Text styles
   date: { fontSize: 18, fontWeight: '600', color: '#333', marginBottom: 4 },
   time: { fontSize: 16, color: '#666', marginBottom: 8 },
   centerName: { fontSize: 16, fontWeight: '500', color: '#007AFF' },
   username: { fontSize: 16, fontWeight: '500', color: '#f70d01ff' },
+
   logoutButton: {
     backgroundColor: '#FF3B30',
     paddingHorizontal: 15,
     paddingVertical: 8,
     borderRadius: 6,
+    alignSelf: 'flex-end',
   },
   logoutButtonText: { color: '#fff', fontSize: 14, fontWeight: '600' },
+
   attendanceContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 40 },
   attendanceButton: {
     width: 200,
@@ -476,15 +518,21 @@ const styles = StyleSheet.create({
     backgroundColor: '#FF3B30',
     justifyContent: 'center',
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
     elevation: 8,
   },
   attendanceButtonSunday: { backgroundColor: '#808080' },
   attendanceButtonMarked: { backgroundColor: '#34C759' },
   attendanceButtonDisabled: { backgroundColor: '#ccc' },
   attendanceButtonText: { color: '#fff', fontSize: 18, fontWeight: 'bold', textAlign: 'center', paddingHorizontal: 20 },
+
   distanceInfo: { marginTop: 20, alignItems: 'center' },
   distanceText: { fontSize: 16, fontWeight: '600', color: '#333', marginBottom: 4 },
   radiusText: { fontSize: 14, color: '#666' },
+
   mapContainer: {
     height: height * 0.4,
     margin: 20,

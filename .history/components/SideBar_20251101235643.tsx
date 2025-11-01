@@ -1,7 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
-import StudentsManagement from './StudentsManagement.tsx'; // <- correct import
 import type { StackNavigationProp } from '@react-navigation/stack';
 
 // If you have defined your navigation types:

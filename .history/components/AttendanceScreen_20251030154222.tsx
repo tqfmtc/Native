@@ -273,12 +273,8 @@ export default function AttendanceScreen({ userData, onLogout }: AttendanceScree
 
       {/* Header with menu button */}
       <View style={styles.header}>
-        <TouchableOpacity style={styles.hamburgerButton3D} activeOpacity={0.8} onPress={toggleSidebar}>
-           <View style={styles.hamburgerButtonInner}>
-              <View style={styles.hamburgerLine} />
-              <View style={styles.hamburgerLine} />
-              <View style={styles.hamburgerLine} />
-            </View>
+        <TouchableOpacity style={styles.menuButton} onPress={toggleSidebar}>
+          <Text style={styles.menuIcon}>☰</Text>
         </TouchableOpacity>
         <View style={styles.headerContent}>
           <Text style={styles.date}>{formatDate()}</Text>
@@ -418,41 +414,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     elevation: 3,
-  },
-  
-  // 3D Hamburger (from 1st code)
-  hamburgerButton3D: {
-    width: 44,
-    height: 44,
-    borderRadius: 12,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.35,
-    shadowRadius: 8,
-    elevation: 10,
-    backgroundColor: 'transparent',
-    right:10,
-  },
-  hamburgerButtonInner: {
-    flex: 1,
-    backgroundColor: '#007AFF',
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#0056CC',
-    shadowColor: '#003E99',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3,
-    elevation: 6,
-  },
-  hamburgerLine: {
-    width: 22,
-    height: 3,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 2,
-    marginVertical: 2,
   },
   menuButton: { marginRight: 10 },
   menuIcon: { fontSize: 26, color: '#007AFF', fontWeight: 'bold' },
