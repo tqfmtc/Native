@@ -1,24 +1,24 @@
 import * as Location from 'expo-location';
 import React, { useEffect, useState } from 'react';
 import {
-    ActivityIndicator,
-    Alert,
-    Animated,
-    Dimensions,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  Dimensions,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+  Animated,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import { APP_CONFIG } from '../constants/config';
 import {
-    Announcement,
-    getAnnouncements,
-    getButtonStatus,
-    getRecentAttendance,
-    LoginResponse,
-    markAttendance,
+  Announcement,
+  getAnnouncements,
+  getRecentAttendance,
+  getButtonStatus,
+  LoginResponse,
+  markAttendance,
 } from '../utils/api';
 import { calculateDistance, isWithinRadius, LocationCoords } from '../utils/location';
 import { clearStoredCredentials } from '../utils/storage';
@@ -62,6 +62,23 @@ export default function AttendanceScreen({ userData, onLogout }: AttendanceScree
         duration: 300,
         useNativeDriver: false,
       }).start();
+    }
+  };
+
+  const handleNavigate = (screen: string) => {
+    switch (screen) {
+      case 'student-management':
+        setCurrentView('student-management');
+        break;
+      case 'profile':
+        setCurrentView('profile');
+        break;
+      case 'settings':
+        setCurrentView('settings');
+        break;
+      default:
+        setCurrentView('attendance');
+        break;
     }
   };
 
@@ -260,121 +277,6 @@ export default function AttendanceScreen({ userData, onLogout }: AttendanceScree
   };
 
 
-  // Render content based on current view
-  const renderContent = () => {
-    if (currentView === 'student-management') {
-      return <StudentManagement userData={userData} onBack={() => setCurrentView('attendance')} />;
-    }
-    // For now, profile and settings just show a placeholder
-    if (currentView === 'profile' || currentView === 'settings') {
-      return (
-        <View style={styles.center}>
-          <Text style={styles.muted}>{currentView.charAt(0).toUpperCase() + currentView.slice(1)} coming soon</Text>
-          <TouchableOpacity 
-            style={styles.backButton} 
-            onPress={() => setCurrentView('attendance')}
-          >
-            <Text style={styles.backButtonText}>← Back to Attendance</Text>
-          </TouchableOpacity>
-        </View>
-      );
-    }
-    // Default attendance view
-    return (
-      <>
-        {/* Attendance Button */}
-        <View style={styles.attendanceContainer}>
-          <TouchableOpacity
-            style={[
-              styles.attendanceButton,
-              new Date().getDay() === 0 && styles.attendanceButtonSunday,
-              attendanceMarked && styles.attendanceButtonMarked,
-              (loading || !buttonEnabled || checkingButtonStatus) && styles.attendanceButtonDisabled,
-            ]}
-            onPress={handleMarkAttendance}
-            disabled={loading || attendanceMarked || !buttonEnabled || checkingButtonStatus}
-          >
-            {loading || checkingButtonStatus ? (
-              <ActivityIndicator size="large" color="#fff" />
-            ) : (
-              <Text style={styles.attendanceButtonText}>
-                {!buttonEnabled
-                  ? 'Attendance Disabled by Admin'
-                  : attendanceMarked
-                  ? 'Attendance Marked Successfully'
-                  : 'Mark Attendance'}
-              </Text>
-            )}
-          </TouchableOpacity>
-
-
-          {currentLocation && userData?.assignedCenter && (
-            <View style={styles.distanceInfo}>
-              <Text style={styles.distanceText}>
-                Distance to center:{' '}
-                {Math.round(
-                  calculateDistance(currentLocation, {
-                    lat: userData.assignedCenter.coordinates[0],
-                    lng: userData.assignedCenter.coordinates[1],
-                  })
-                )}
-                m
-              </Text>
-              <Text style={styles.radiusText}>Required: Within {APP_CONFIG.ATTENDANCE_RADIUS}m</Text>
-            </View>
-          )}
-        </View>
-
-
-        {/* Map */}
-        <View style={styles.mapContainer}>
-          {locationLoading ? (
-            <View style={styles.mapLoadingContainer}>
-              <ActivityIndicator size="large" color="#007AFF" />
-              <Text style={styles.mapLoadingText}>Loading map...</Text>
-            </View>
-          ) : currentLocation && userData.assignedCenter ? (
-            <WebView
-              style={styles.map}
-              source={{
-                html: `
-                  <!DOCTYPE html>
-                  <html>
-                  <head>
-                    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-                    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-                    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-                    <style>body { margin: 0; } #map { height: 100vh; width: 100vw; }</style>
-                  </head>
-                  <body>
-                    <div id="map"></div>
-                    <script>
-                      const centerLat = ${userData.assignedCenter.coordinates[0]};
-                      const centerLng = ${userData.assignedCenter.coordinates[1]};
-                      const userLat = ${currentLocation.lat};
-                      const userLng = ${currentLocation.lng};
-                      const radius = ${APP_CONFIG.ATTENDANCE_RADIUS};
-                      const map = L.map('map').setView([centerLat, centerLng], 16);
-                      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(map);
-                      L.marker([centerLat, centerLng]).addTo(map).bindPopup('${userData.assignedCenter.name}');
-                      L.marker([userLat, userLng]).addTo(map).bindPopup('You');
-                      L.circle([centerLat, centerLng], { color: 'blue', fillColor: 'lightblue', fillOpacity: 0.2, radius }).addTo(map);
-                    </script>
-                  </body>
-                  </html>
-                `,
-              }}
-            />
-          ) : (
-            <View style={styles.mapErrorContainer}>
-              <Text style={styles.mapErrorText}>Unable to load map</Text>
-            </View>
-          )}
-        </View>
-      </>
-    );
-  };
-
   return (
     <View style={styles.container}>
       {/* Sidebar overlay */}
@@ -385,20 +287,7 @@ export default function AttendanceScreen({ userData, onLogout }: AttendanceScree
 
       {/* Animated sidebar */}
       <Animated.View style={[styles.sidebarContainer, { left: sidebarAnim }]}>
-        <SideBar 
-          onClose={toggleSidebar} 
-          onNavigate={(screen) => {
-            if (screen === '/attendance') {
-              setCurrentView('attendance');
-            } else if (screen === '/student-management') {
-              setCurrentView('student-management');
-            } else if (screen === '/profile') {
-              setCurrentView('profile');
-            } else if (screen === '/settings') {
-              setCurrentView('settings');
-            }
-          }} 
-        />
+        <SideBar onClose={toggleSidebar} onNavigate={handleNavigate} />
       </Animated.View>
 
 
@@ -411,27 +300,112 @@ export default function AttendanceScreen({ userData, onLogout }: AttendanceScree
               <View style={styles.hamburgerLine} />
             </View>
         </TouchableOpacity>
-        {currentView === 'attendance' ? (
-          <>
-            <View style={styles.headerContent}>
-              <Text style={styles.date}>{formatDate()}</Text>
-              <Text style={styles.time}>{formatTime()}</Text>
-              <Text style={styles.centerName}>Center: {userData.assignedCenter?.name || 'No Center Assigned'}</Text>
-              <Text style={styles.username}>Welcome {userData.name || 'Guest'}</Text>
-            </View>
-            <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-              <Text style={styles.logoutButtonText}>Logout</Text>
-            </TouchableOpacity>
-          </>
-        ) : (
-          <View style={styles.headerContent} />
+        <View style={styles.headerContent}>
+          <Text style={styles.date}>{formatDate()}</Text>
+          <Text style={styles.time}>{formatTime()}</Text>
+          <Text style={styles.centerName}>Center: {userData.assignedCenter?.name || 'No Center Assigned'}</Text>
+          <Text style={styles.username}>Welcome {userData.name || 'Guest'}</Text>
+        </View>
+        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+          <Text style={styles.logoutButtonText}>Logout</Text>
+        </TouchableOpacity>
+      </View>
+
+
+      {/* Render different views based on currentView */}
+      {currentView === 'attendance' && (
+        <>
+          {/* Attendance Button */}
+          <View style={styles.attendanceContainer}>
+        <TouchableOpacity
+          style={[
+            styles.attendanceButton,
+            new Date().getDay() === 0 && styles.attendanceButtonSunday,
+            attendanceMarked && styles.attendanceButtonMarked,
+            (loading || !buttonEnabled || checkingButtonStatus) && styles.attendanceButtonDisabled,
+          ]}
+          onPress={handleMarkAttendance}
+          disabled={loading || attendanceMarked || !buttonEnabled || checkingButtonStatus}
+        >
+          {loading || checkingButtonStatus ? (
+            <ActivityIndicator size="large" color="#fff" />
+          ) : (
+            <Text style={styles.attendanceButtonText}>
+              {!buttonEnabled
+                ? 'Attendance Disabled by Admin'
+                : attendanceMarked
+                ? 'Attendance Marked Successfully'
+                : 'Mark Attendance'}
+            </Text>
+          )}
+        </TouchableOpacity>
+
+
+        {currentLocation && userData?.assignedCenter && (
+          <View style={styles.distanceInfo}>
+            <Text style={styles.distanceText}>
+              Distance to center:{' '}
+              {Math.round(
+                calculateDistance(currentLocation, {
+                  lat: userData.assignedCenter.coordinates[0],
+                  lng: userData.assignedCenter.coordinates[1],
+                })
+              )}
+              m
+            </Text>
+            <Text style={styles.radiusText}>Required: Within {APP_CONFIG.ATTENDANCE_RADIUS}m</Text>
+          </View>
         )}
       </View>
 
-      {/* Render content based on current view */}
-      {renderContent()}
+
+      {/* Map */}
+      <View style={styles.mapContainer}>
+        {locationLoading ? (
+          <View style={styles.mapLoadingContainer}>
+            <ActivityIndicator size="large" color="#007AFF" />
+            <Text style={styles.mapLoadingText}>Loading map...</Text>
+          </View>
+        ) : currentLocation && userData.assignedCenter ? (
+          <WebView
+            style={styles.map}
+            source={{
+              html: `
+                <!DOCTYPE html>
+                <html>
+                <head>
+                  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+                  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+                  <style>body { margin: 0; } #map { height: 100vh; width: 100vw; }</style>
+                </head>
+                <body>
+                  <div id="map"></div>
+                  <script>
+                    const centerLat = ${userData.assignedCenter.coordinates[0]};
+                    const centerLng = ${userData.assignedCenter.coordinates[1]};
+                    const userLat = ${currentLocation.lat};
+                    const userLng = ${currentLocation.lng};
+                    const radius = ${APP_CONFIG.ATTENDANCE_RADIUS};
+                    const map = L.map('map').setView([centerLat, centerLng], 16);
+                    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap' }).addTo(map);
+                    L.marker([centerLat, centerLng]).addTo(map).bindPopup('${userData.assignedCenter.name}');
+                    L.marker([userLat, userLng]).addTo(map).bindPopup('You');
+                    L.circle([centerLat, centerLng], { color: 'blue', fillColor: 'lightblue', fillOpacity: 0.2, radius }).addTo(map);
+                  </script>
+                </body>
+                </html>
+              `,
+            }}
+          />
+        ) : (
+          <View style={styles.mapErrorContainer}>
+            <Text style={styles.mapErrorText}>Unable to load map</Text>
+          </View>
+        )}
+      </View>
     </View>
-  );
+  )
 }
 
 
@@ -467,7 +441,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     elevation: 3,
-    minHeight: 60,
   },
   
   // 3D Hamburger (from 1st code)
@@ -507,7 +480,6 @@ const styles = StyleSheet.create({
   menuButton: { marginRight: 10 },
   menuIcon: { fontSize: 26, color: '#007AFF', fontWeight: 'bold' },
   headerContent: { flex: 1 },
-  headerTitle: { fontSize: 20, fontWeight: '700', color: '#333' },
   date: { fontSize: 18, fontWeight: '600', color: '#333', marginBottom: 4 },
   time: { fontSize: 16, color: '#666', marginBottom: 8 },
   centerName: { fontSize: 16, fontWeight: '500', color: '#007AFF' },
@@ -549,14 +521,4 @@ const styles = StyleSheet.create({
   mapLoadingText: { marginTop: 10, fontSize: 16, color: '#666' },
   mapErrorContainer: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#fff' },
   mapErrorText: { fontSize: 16, color: '#666' },
-  center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 20 },
-  muted: { fontSize: 18, color: '#666', marginBottom: 20 },
-  backButton: {
-    backgroundColor: '#007AFF',
-    paddingHorizontal: 20,
-    paddingVertical: 12,
-    borderRadius: 8,
-    marginTop: 10,
-  },
-  backButtonText: { color: '#fff', fontSize: 16, fontWeight: '600' },
 });

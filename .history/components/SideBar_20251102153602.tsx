@@ -1,27 +1,23 @@
 import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { useRouter } from 'expo-router';
 
 interface SideBarProps {
   onClose: () => void;
-  onNavigate?: (screen: string) => void;
 }
 
-const SideBar: React.FC<SideBarProps> = ({ onClose, onNavigate }) => {
-  const go = (screen: string) => {
+const SideBar: React.FC<SideBarProps> = ({ onClose }) => {
+  const router = useRouter();
+
+  const go = (href: string) => {
     onClose();
-    if (onNavigate) {
-      onNavigate(screen);
-    }
+    router.push(href);
   };
 
   return (
     <View style={styles.container}>
       <TouchableOpacity style={styles.closeButton} onPress={onClose}>
         <Text style={styles.closeText}>×</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity style={styles.menuItem} onPress={() => go('/attendance')}>
-        <Text style={styles.menuText}>Attendance</Text>
       </TouchableOpacity>
 
       <TouchableOpacity style={styles.menuItem} onPress={() => go('/student-management')}>

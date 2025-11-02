@@ -1,17 +1,21 @@
 import React from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import { useNavigation } from '@react-navigation/native';
+import type { StackNavigationProp } from '@react-navigation/stack';
+import type { RootStackParamList } from '../AppNavigator'; // import the shared type
+
+type NavigationProp = StackNavigationProp<RootStackParamList>;
 
 interface SideBarProps {
   onClose: () => void;
-  onNavigate?: (screen: string) => void;
 }
 
-const SideBar: React.FC<SideBarProps> = ({ onClose, onNavigate }) => {
-  const go = (screen: string) => {
+const SideBar: React.FC<SideBarProps> = ({ onClose }) => {
+  const navigation = useNavigation<NavigationProp>();
+
+  const handleNavigate = (screen: keyof RootStackParamList) => {
     onClose();
-    if (onNavigate) {
-      onNavigate(screen);
-    }
+    navigation.navigate(screen);
   };
 
   return (
@@ -20,19 +24,15 @@ const SideBar: React.FC<SideBarProps> = ({ onClose, onNavigate }) => {
         <Text style={styles.closeText}>×</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity style={styles.menuItem} onPress={() => go('/attendance')}>
-        <Text style={styles.menuText}>Attendance</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity style={styles.menuItem} onPress={() => go('/student-management')}>
+      <TouchableOpacity style={styles.menuItem} onPress={() => handleNavigate('StudentManagement')}>
         <Text style={styles.menuText}>Student Management</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity style={styles.menuItem} onPress={() => go('/profile')}>
+      <TouchableOpacity style={styles.menuItem} onPress={() => handleNavigate('Profile')}>
         <Text style={styles.menuText}>Profile</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity style={styles.menuItem} onPress={() => go('/settings')}>
+      <TouchableOpacity style={styles.menuItem} onPress={() => handleNavigate('Settings')}>
         <Text style={styles.menuText}>Settings</Text>
       </TouchableOpacity>
     </View>

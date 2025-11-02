@@ -12,7 +12,7 @@ import {
   View,
   StatusBar,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context'; // ✅ correct import
 import { API_CONFIG } from '../constants/config';
 import { LoginResponse } from '../utils/api';
 
@@ -161,9 +161,12 @@ export default function StudentManagement({ userData, onBack }: Props) {
 
   return (
     <>
+      {/* Hide system status bar to test spacing */}
       <StatusBar translucent backgroundColor="transparent" barStyle="dark-content" />
+
+      {/* ✅ SafeAreaView with no top inset */}
       <SafeAreaView edges={['bottom']} style={styles.root}>
-        {/* Compact header with bigger text */}
+        {/* Compact header */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Students</Text>
           <Text style={styles.headerSub}>
@@ -224,31 +227,31 @@ export default function StudentManagement({ userData, onBack }: Props) {
   );
 }
 
+// Styles
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#f7f7f8' },
 
-  // ✅ Compact header, but text is large and bold
+  // ✅ Header as small as possible
   header: {
     backgroundColor: '#fff',
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: '#ddd',
-    paddingVertical: 4, // minimal padding
+    paddingVertical: 2,
     paddingHorizontal: 12,
-    alignItems: 'center',
   },
   headerTitle: {
-    fontSize: 24, // Bigger text
-    fontWeight: '800',
+    fontSize: 17,
+    fontWeight: '700',
     color: '#111',
     textAlign: 'center',
-    lineHeight: 28,
+    lineHeight: 20,
   },
   headerSub: {
-    fontSize: 14,
-    color: '#555',
+    fontSize: 11,
+    color: '#666',
     textAlign: 'center',
-    lineHeight: 18,
-    marginTop: 2,
+    lineHeight: 14,
+    marginTop: 1,
   },
 
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
