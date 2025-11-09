@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useReducer, useState, memo, useCallback } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
@@ -11,19 +11,24 @@ import {
   TouchableOpacity,
   View,
   StatusBar,
-  KeyboardAvoidingView,
-  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { API_CONFIG } from '../constants/config';
 import { LoginResponse, getStudent, putStudent } from '../utils/api';
 
-// Types
-type StudentSubject = { _id: string; subject?: { _id: string; name: string } };
+type StudentSubject = {
+  _id: string;
+  subject?: { _id: string; name: string };
+};
 
-type AttendanceRecord = { month: string; presentDays: number; totalDays: number };
+type AttendanceRecord = {
+  month: string; // ISO or yyyy-MM
+  presentDays: number;
+  totalDays: number;
+};
 
-type RefId = { _id: string; name?: string };
+type CenterRef = { _id: string; name: string };
+type TutorRef = { _id: string; name: string };
 
 type Student = {
   _id: string;
@@ -38,165 +43,23 @@ type Student = {
   guardianInfo?: { name?: string; contact?: string };
   isNonSchoolGoing?: boolean;
   schoolInfo?: { name?: string; class?: string };
-  assignedCenter?: RefId | string;
-  assignedTutor?: RefId | string;
+  assignedCenter?: CenterRef | string;
+  assignedTutor?: TutorRef | string;
   subjects?: StudentSubject[];
   remarks?: string;
-  joiningDate?: string;
   createdAt?: string;
+  joiningDate?: string;
   attendance?: AttendanceRecord[];
 };
 
-type TutorResponse = { _id: string; name: string; students?: Student[] };
+type TutorResponse = {
+  _id: string;
+  name: string;
+  students?: Student[];
+};
 
-// Utils
 const buildUrl = (template: string, params: Record<string, string>) =>
   template.replace(/:([A-Za-z_]+)/g, (_, key) => encodeURIComponent(params[key] || ''));
-
-// Form reducer to avoid recreating whole objects
-type FormAction =
-  | { key: keyof Student; value: any }
-  | { key: 'schoolInfo'; value: { name?: string; class?: string } }
-  | { key: 'guardianInfo'; value: { name?: string; contact?: string } };
-
-function formReducer(state: Partial<Student>, action: FormAction): Partial<Student> {
-  if (action.key === 'schoolInfo') {
-    return { ...state, schoolInfo: { ...(state.schoolInfo || {}), ...action.value } };
-  }
-  if (action.key === 'guardianInfo') {
-    return { ...state, guardianInfo: { ...(state.guardianInfo || {}), ...action.value } };
-  }
-  return { ...state, [action.key]: action.value };
-}
-
-// Memoized leaf components to minimize re-renders
-const Field = memo(function Field({
-  label,
-  value,
-  onChangeText,
-  keyboardType = 'default',
-  placeholder,
-}: {
-  label: string;
-  value?: string;
-  onChangeText: (t: string) => void;
-  keyboardType?: 'default' | 'numeric' | 'phone-pad';
-  placeholder?: string;
-}) {
-  return (
-    <View style={styles.infoPair}>
-      <Text style={styles.infoLabel}>{label}</Text>
-      <TextInput
-        style={styles.input}
-        value={value ?? ''}
-        onChangeText={onChangeText}
-        keyboardType={keyboardType}
-        placeholder={placeholder}
-        placeholderTextColor="#9AA0A6"
-      />
-    </View>
-  );
-});
-
-const Segmented = memo(function Segmented({
-  label,
-  value,
-  onChange,
-  options,
-}: {
-  label: string;
-  value?: string;
-  onChange: (v: string) => void;
-  options: { label: string; value: string }[];
-}) {
-  return (
-    <View style={styles.infoPair}>
-      <Text style={styles.infoLabel}>{label}</Text>
-      <View style={styles.segmented}>
-        {options.map(opt => {
-          const active = value === opt.value;
-          return (
-            <TouchableOpacity
-              key={opt.value}
-              style={[styles.segment, active && styles.segmentActive]}
-              onPress={() => onChange(opt.value)}
-              activeOpacity={0.8}
-            >
-              <Text style={[styles.segmentText, active && styles.segmentTextActive]}>{opt.label}</Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-    </View>
-  );
-});
-
-const BinaryToggle = memo(function BinaryToggle({
-  label,
-  value,
-  onChange,
-}: {
-  label: string;
-  value?: boolean;
-  onChange: (v: boolean) => void;
-}) {
-  return (
-    <View style={styles.infoPair}>
-      <Text style={styles.infoLabel}>{label}</Text>
-      <View style={styles.segmented}>
-        {[
-          { label: 'No', value: false },
-          { label: 'Yes', value: true },
-        ].map(opt => {
-          const active = value === opt.value;
-          return (
-            <TouchableOpacity
-              key={String(opt.value)}
-              style={[styles.segment, active && styles.segmentActive]}
-              onPress={() => onChange(opt.value)}
-              activeOpacity={0.8}
-            >
-              <Text style={[styles.segmentText, active && styles.segmentTextActive]}>{opt.label}</Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-    </View>
-  );
-});
-
-const InfoPair = memo(function InfoPair({ label, value }: { label: string; value?: string }) {
-  return (
-    <View style={styles.infoPair}>
-      <Text style={styles.infoLabel}>{label}</Text>
-      <Text style={styles.infoValue}>{value || '-'}</Text>
-    </View>
-  );
-});
-
-const SubjectsBlock = memo(function SubjectsBlock({ subjects }: { subjects?: StudentSubject[] }) {
-  if (!subjects || subjects.length === 0) {
-    return <Text style={styles.mutedCenter}>Empty array currently</Text>;
-  }
-  return (
-    <View style={styles.pillsRow}>
-      {subjects.map(s => (
-        <View key={s._id} style={styles.pill}>
-          <Text style={styles.pillText}>{s.subject?.name || 'Unknown'}</Text>
-        </View>
-      ))}
-    </View>
-  );
-});
-
-const Section = memo(function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <View style={styles.section}>
-      <Text style={styles.sectionTitle}>{title}</Text>
-      {children}
-    </View>
-  );
-});
 
 interface Props {
   userData: LoginResponse;
@@ -209,22 +72,25 @@ export default function StudentManagement({ userData, onBack }: Props) {
   const [students, setStudents] = useState<Student[]>([]);
   const [fetchError, setFetchError] = useState<string | null>(null);
 
+  // Modal state
   const [modalVisible, setModalVisible] = useState(false);
   const [modalMode, setModalMode] = useState<'view' | 'edit'>('view');
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
 
+  // Detail + form state (kept stable to avoid keyboard closing)
   const [studentLoading, setStudentLoading] = useState(false);
   const [studentDetail, setStudentDetail] = useState<Student | null>(null);
-  const [form, dispatch] = useReducer(formReducer, {});
+  const [form, setForm] = useState<Partial<Student>>({});
 
-  const authHeaders = useMemo(
-    () => ({
+  const authHeaders = useMemo(() => {
+    const token = userData?.token;
+    return {
       'Content-Type': 'application/json',
-      Authorization: `Bearer ${userData.token}`,
-    }),
-    [userData.token]
-  );
+      ...(token && { Authorization: `Bearer ${token}` }),
+    };
+  }, [userData?.token]);
 
+  // Tutor + students
   useEffect(() => {
     const loadTutor = async () => {
       setLoading(true);
@@ -246,27 +112,30 @@ export default function StudentManagement({ userData, onBack }: Props) {
     loadTutor();
   }, [userData._id, authHeaders]);
 
+  // Fetch student
   const fetchStudent = async (id: string) => {
     setStudentLoading(true);
     try {
       const data: Student = await getStudent(id, userData.token);
       setStudentDetail(data);
-      // seed reducer state with one dispatch per key to minimize churn
-      dispatch({ key: 'name', value: data.name });
-      dispatch({ key: 'fatherName', value: data.fatherName });
-      dispatch({ key: 'contact', value: data.contact });
-      dispatch({ key: 'status', value: data.status || 'active' });
-      dispatch({ key: 'gender', value: data.gender });
-      dispatch({ key: 'medium', value: data.medium });
-      dispatch({ key: 'aadharNumber', value: data.aadharNumber });
-      dispatch({ key: 'isOrphan', value: !!data.isOrphan });
-      dispatch({ key: 'guardianInfo', value: data.guardianInfo || {} });
-      dispatch({ key: 'isNonSchoolGoing', value: !!data.isNonSchoolGoing });
-      dispatch({ key: 'schoolInfo', value: data.schoolInfo || {} });
-      dispatch({ key: 'assignedCenter', value: data.assignedCenter });
-      dispatch({ key: 'assignedTutor', value: data.assignedTutor });
-      dispatch({ key: 'subjects', value: data.subjects || [] });
-      dispatch({ key: 'remarks', value: data.remarks });
+      // Fill editable form
+      setForm({
+        name: data.name,
+        fatherName: data.fatherName,
+        contact: data.contact,
+        status: data.status || 'active',
+        gender: data.gender,
+        medium: data.medium,
+        aadharNumber: data.aadharNumber,
+        isOrphan: data.isOrphan,
+        guardianInfo: data.guardianInfo,
+        isNonSchoolGoing: data.isNonSchoolGoing,
+        schoolInfo: data.schoolInfo,
+        assignedCenter: data.assignedCenter,
+        assignedTutor: data.assignedTutor,
+        subjects: data.subjects || [],
+        remarks: data.remarks,
+      });
     } catch (e: any) {
       Alert.alert('Error', e?.message || 'Failed to load student');
     } finally {
@@ -275,6 +144,7 @@ export default function StudentManagement({ userData, onBack }: Props) {
   };
 
   const openModal = (mode: 'view' | 'edit', id: string) => {
+    // Do NOT toggle visibility repeatedly while user types; open once and keep it stable
     setModalMode(mode);
     setSelectedStudentId(id);
     setModalVisible(true);
@@ -283,48 +153,61 @@ export default function StudentManagement({ userData, onBack }: Props) {
 
   const closeModal = () => {
     setModalVisible(false);
+    // Keep state cleanup minimal to avoid flashing on next open
     setSelectedStudentId(null);
     setStudentDetail(null);
-    // leave form reducer as-is; it won’t matter when modal is closed
+    setForm({});
   };
 
-  const toId = (val?: RefId | string) => (typeof val === 'string' ? val : (val?._id || undefined));
-
+  // Save (PUT)
   const handleSave = async () => {
     if (!selectedStudentId) return;
+    // Basic validation to avoid closing keyboard inadvertently
     if (!form.name || !form.fatherName || !form.contact) {
       Alert.alert('Validation', 'Name, Father Name and Contact are required');
       return;
     }
 
+    // Build payload (normalize references to IDs if needed by backend)
     const payload: any = {
-      name: String(form.name).trim(),
-      fatherName: String(form.fatherName).trim(),
-      contact: String(form.contact).trim(),
-      status: (form.status as string) || 'active',
+      name: (form.name || '').trim(),
+      fatherName: (form.fatherName || '').trim(),
+      contact: (form.contact || '').trim(),
       gender: form.gender,
       medium: form.medium,
-      aadharNumber: (form.aadharNumber as string) || '',
+      aadharNumber: (form.aadharNumber || '').trim(),
       isOrphan: !!form.isOrphan,
       isNonSchoolGoing: !!form.isNonSchoolGoing,
-      remarks: (form.remarks as string) || '',
-      guardianInfo: form.isOrphan
-        ? { name: form.guardianInfo?.name || '', contact: form.guardianInfo?.contact || '' }
-        : undefined,
-      schoolInfo: !form.isNonSchoolGoing
-        ? { name: form.schoolInfo?.name || '', class: form.schoolInfo?.class || '' }
-        : undefined,
-      assignedCenter: toId(form.assignedCenter as any),
-      assignedTutor: toId(form.assignedTutor as any),
-      subjects: Array.isArray(form.subjects) ? (form.subjects as StudentSubject[]).map(s => s._id) : [],
+      remarks: (form.remarks || '').trim(),
+      status: form.status || 'active',
+      // guardianInfo
+      ...(form.isOrphan
+        ? { guardianInfo: { name: form.guardianInfo?.name || '', contact: form.guardianInfo?.contact || '' } }
+        : {}),
+      // schoolInfo
+      ...(!form.isNonSchoolGoing
+        ? { schoolInfo: { name: form.schoolInfo?.name || '', class: form.schoolInfo?.class || '' } }
+        : {}),
+      // assigned refs
+      assignedCenter:
+        typeof form.assignedCenter === 'string'
+          ? form.assignedCenter
+          : (form.assignedCenter as CenterRef | undefined)?._id,
+      assignedTutor:
+        typeof form.assignedTutor === 'string'
+          ? form.assignedTutor
+          : (form.assignedTutor as TutorRef | undefined)?._id,
+      // subjects as StudentSubject IDs
+      subjects: Array.isArray(form.subjects) ? form.subjects.map(ss => ss._id) : [],
     };
 
     try {
-      const updated = await putStudent(selectedStudentId, userData.token, payload);
+      const updated = await putStudent(selectedStudentId, payload, userData.token);
+      // Update detail + list
       setStudentDetail(prev => (prev ? { ...prev, ...updated } : updated));
       setStudents(prev => prev.map(s => (s._id === updated._id ? { ...s, ...updated } : s)));
       Alert.alert('Success', 'Student updated successfully');
-      setModalMode('view'); // do not close modal; minimal state change
+      setModalMode('view'); // stay open, flip back to view (avoid closing keyboard until done)
     } catch (e: any) {
       Alert.alert('Update Failed', e?.message || 'Unable to update student');
     }
@@ -357,11 +240,70 @@ export default function StudentManagement({ userData, onBack }: Props) {
     </View>
   );
 
-  const SectionTitle = useCallback(({ t }: { t: string }) => <Text style={styles.sectionTitle}>{t}</Text>, []);
+  // View-only row
+  const InfoPair = ({ label, value }: { label: string; value?: string }) => (
+    <View style={styles.infoPair}>
+      <Text style={styles.infoLabel}>{label}</Text>
+      <Text style={styles.infoValue}>{value || '-'}</Text>
+    </View>
+  );
+
+  // Editable field
+  const Field = ({
+    label,
+    value,
+    onChangeText,
+    keyboardType = 'default',
+    placeholder,
+    multiline = false,
+  }: {
+    label: string;
+    value?: string;
+    onChangeText: (t: string) => void;
+    keyboardType?: 'default' | 'numeric' | 'phone-pad';
+    placeholder?: string;
+    multiline?: boolean;
+  }) => (
+    <View style={styles.infoPair}>
+      <Text style={styles.infoLabel}>{label}</Text>
+      <TextInput
+        style={[styles.input, multiline && styles.inputMultiline]}
+        value={value ?? ''}
+        onChangeText={onChangeText}
+        keyboardType={keyboardType}
+        placeholder={placeholder}
+        placeholderTextColor="#9AA0A6"
+        multiline={multiline}
+      />
+    </View>
+  );
+
+  const SubjectsBlock = ({ subjects }: { subjects?: StudentSubject[] }) => {
+    if (!subjects || subjects.length === 0) {
+      return <Text style={styles.mutedCenter}>Empty array currently</Text>;
+    }
+    return (
+      <View style={styles.pillsRow}>
+        {subjects.map(ss => (
+          <View key={ss._id} style={styles.pill}>
+            <Text style={styles.pillText}>{ss.subject?.name || 'Unknown'}</Text>
+          </View>
+        ))}
+      </View>
+    );
+  };
+
+  const Section = ({ title, children }: { title: string; children: React.ReactNode }) => (
+    <View style={styles.section}>
+      <Text style={styles.sectionTitle}>{title}</Text>
+      {children}
+    </View>
+  );
 
   const formatMonthPretty = (iso: string) => {
+    // iso may be yyyy-MM or full ISO date
     try {
-      const parts = iso.includes('-') && iso.length <= 7 ? iso.split('-') : null;
+      const parts = iso.includes('-') && iso.length <= 7 ? iso.split('-') : null; // yyyy-MM
       if (parts && parts.length >= 2) {
         const y = parseInt(parts[0], 10);
         const m = parseInt(parts[1], 10) - 1;
@@ -378,7 +320,6 @@ export default function StudentManagement({ userData, onBack }: Props) {
 
   const renderModalBody = () => {
     const editable = modalMode === 'edit';
-
     if (studentLoading) {
       return (
         <View style={styles.center}>
@@ -386,50 +327,56 @@ export default function StudentManagement({ userData, onBack }: Props) {
         </View>
       );
     }
-    if (!studentDetail) return <Text style={styles.mutedCenter}>No data</Text>;
-
-    const joinDate =
-      studentDetail.joiningDate || studentDetail.createdAt
-        ? new Date(studentDetail.joiningDate || studentDetail.createdAt!).toLocaleDateString('en-IN')
-        : '-';
+    if (!studentDetail) {
+      return <Text style={styles.mutedCenter}>No data</Text>;
+    }
 
     return (
-      <ScrollView contentContainerStyle={{ paddingBottom: 16 }} keyboardShouldPersistTaps="handled">
+      <ScrollView
+        contentContainerStyle={{ paddingBottom: 16 }}
+        keyboardShouldPersistTaps="handled"
+      >
         {/* Personal Information */}
         <Section title="Personal Information">
           {editable ? (
             <>
-              <Field label="Name" value={form.name as string} onChangeText={t => dispatch({ key: 'name', value: t })} />
+              <Field
+                label="Name"
+                value={form.name as string}
+                onChangeText={t => setForm(f => ({ ...f, name: t }))}
+                placeholder="Student name"
+              />
               <Field
                 label="Father's Name"
                 value={form.fatherName as string}
-                onChangeText={t => dispatch({ key: 'fatherName', value: t })}
+                onChangeText={t => setForm(f => ({ ...f, fatherName: t }))}
+                placeholder="Father's name"
               />
               <Field
                 label="Contact"
                 value={form.contact as string}
-                onChangeText={t => dispatch({ key: 'contact', value: t })}
+                onChangeText={t => setForm(f => ({ ...f, contact: t }))}
                 keyboardType="phone-pad"
+                placeholder="10-digit phone"
               />
-              <Segmented
+              <Field
                 label="Gender"
                 value={form.gender as string}
-                onChange={v => dispatch({ key: 'gender', value: v as 'Male' | 'Female' })}
-                options={[
-                  { label: 'Male', value: 'Male' },
-                  { label: 'Female', value: 'Female' },
-                ]}
+                onChangeText={t => setForm(f => ({ ...f, gender: t as any }))}
+                placeholder="Male | Female"
               />
               <Field
                 label="Medium"
                 value={form.medium as string}
-                onChangeText={t => dispatch({ key: 'medium', value: t })}
+                onChangeText={t => setForm(f => ({ ...f, medium: t as any }))}
+                placeholder="English | Hindi | Urdu"
               />
               <Field
                 label="Aadhar Number"
                 value={form.aadharNumber as string}
-                onChangeText={t => dispatch({ key: 'aadharNumber', value: t })}
+                onChangeText={t => setForm(f => ({ ...f, aadharNumber: t }))}
                 keyboardType="numeric"
+                placeholder="1234 5678 9012"
               />
             </>
           ) : (
@@ -450,13 +397,15 @@ export default function StudentManagement({ userData, onBack }: Props) {
             <>
               <Field
                 label="School Name"
-                value={studentDetail.schoolInfo?.name ?? (form.schoolInfo as any)?.name}
-                onChangeText={t => dispatch({ key: 'schoolInfo', value: { name: t } })}
+                value={form.schoolInfo?.name as string}
+                onChangeText={t => setForm(f => ({ ...f, schoolInfo: { ...(f.schoolInfo || {}), name: t } }))}
+                placeholder="School name"
               />
               <Field
                 label="Class"
-                value={studentDetail.schoolInfo?.class ?? (form.schoolInfo as any)?.class}
-                onChangeText={t => dispatch({ key: 'schoolInfo', value: { class: t } })}
+                value={form.schoolInfo?.class as string}
+                onChangeText={t => setForm(f => ({ ...f, schoolInfo: { ...(f.schoolInfo || {}), class: t } }))}
+                placeholder="e.g., 5th"
               />
             </>
           ) : (
@@ -478,33 +427,19 @@ export default function StudentManagement({ userData, onBack }: Props) {
 
         {/* Non-School Going */}
         <Section title="Non-School Going">
-          {editable ? (
-            <BinaryToggle
-              label="Non-School Going"
-              value={!!form.isNonSchoolGoing}
-              onChange={v => dispatch({ key: 'isNonSchoolGoing', value: v })}
-            />
-          ) : (
-            <InfoPair label="Non-School Going" value={studentDetail.isNonSchoolGoing ? 'Yes' : 'No'} />
-          )}
-        </Section>
-
-        {/* Is Orphan */}
-        <Section title="Is Orphan">
-          {editable ? (
-            <BinaryToggle
-              label="Is Orphan"
-              value={!!form.isOrphan}
-              onChange={v => dispatch({ key: 'isOrphan', value: v })}
-            />
-          ) : (
-            <InfoPair label="Is Orphan" value={studentDetail.isOrphan ? 'Yes' : 'No'} />
-          )}
+          <InfoPair label="Non-School Going" value={studentDetail.isNonSchoolGoing ? 'Yes' : 'No'} />
         </Section>
 
         {/* Joining Date */}
         <Section title="Joining Date">
-          <InfoPair label="Joining Date" value={joinDate} />
+          <InfoPair
+            label="Joining Date"
+            value={
+              studentDetail.joiningDate
+                ? new Date(studentDetail.joiningDate).toLocaleDateString('en-IN')
+                : '-'
+            }
+          />
         </Section>
 
         {/* Attendance History */}
@@ -530,7 +465,7 @@ export default function StudentManagement({ userData, onBack }: Props) {
           <TouchableOpacity style={[styles.btn, styles.btnLight]} onPress={closeModal}>
             <Text style={styles.btnTextDark}>Close</Text>
           </TouchableOpacity>
-          {modalMode === 'edit' ? (
+          {editable ? (
             <TouchableOpacity style={[styles.btn, styles.btnPrimaryGrad]} onPress={handleSave}>
               <Text style={styles.btnText}>Save</Text>
             </TouchableOpacity>
@@ -597,29 +532,25 @@ export default function StudentManagement({ userData, onBack }: Props) {
           />
         )}
 
-        {/* Keyboard-safe, stable modal */}
-        <Modal visible={modalVisible} transparent animationType="fade" onRequestClose={closeModal}>
-          <KeyboardAvoidingView
-            style={{ flex: 1 }}
-            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-            keyboardVerticalOffset={Platform.OS === 'ios' ? 10 : 0}
-          >
-            <View style={styles.modalBackdrop}>
-              <View style={styles.modalCard}>
-                {renderModalBody()}
-              </View>
-            </View>
-          </KeyboardAvoidingView>
+        <Modal
+          visible={modalVisible}
+          transparent
+          animationType="fade"
+          onRequestClose={closeModal}
+        >
+          <View style={styles.modalBackdrop}>
+            <View style={styles.modalCard}>{renderModalBody()}</View>
+          </View>
         </Modal>
       </SafeAreaView>
     </>
   );
 }
 
-// Styles (kept from refined version)
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#F6F7FB' },
 
+  // Header
   header: {
     backgroundColor: '#ffffff',
     borderBottomWidth: StyleSheet.hairlineWidth,
@@ -627,16 +558,35 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 12,
   },
-  headerRow: { flexDirection: 'row', alignItems: 'center', minHeight: 34, justifyContent: 'space-between' },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: 34,
+    justifyContent: 'space-between',
+  },
   backText: { color: '#2563EB', fontSize: 14, fontWeight: '700' },
-  headerTitle: { fontSize: 18, fontWeight: '800', color: '#0F172A', lineHeight: 20, textAlign: 'center' },
-  headerSub: { fontSize: 12, color: '#6B7280', textAlign: 'center', lineHeight: 14, marginTop: 2 },
+  headerTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#0F172A',
+    lineHeight: 20,
+    textAlign: 'center',
+  },
+  headerSub: {
+    fontSize: 12,
+    color: '#6B7280',
+    textAlign: 'center',
+    lineHeight: 14,
+    marginTop: 2,
+  },
 
+  // Empty/center
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   muted: { color: '#6B7280' },
   mutedCenter: { color: '#6B7280', textAlign: 'center' },
   errorText: { color: '#D32F2F' },
 
+  // Cards
   card: {
     backgroundColor: '#FFFFFF',
     borderRadius: 14,
@@ -650,16 +600,34 @@ const styles = StyleSheet.create({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: '#ECEEF5',
   },
-  cardHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  cardHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
   cardTitle: { fontSize: 16, fontWeight: '800', color: '#111827' },
-  cardRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5 },
+  cardRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingVertical: 5,
+  },
   label: { color: '#7C838D', width: 100, fontSize: 13, lineHeight: 16 },
   value: { color: '#0F172A', flex: 1, textAlign: 'right', fontSize: 14, lineHeight: 18 },
 
-  badge: { paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999, fontSize: 12, fontWeight: '700' },
+  // Badge
+  badge: {
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+    fontSize: 12,
+    overflow: 'hidden',
+    fontWeight: '700',
+  },
   badgeActive: { backgroundColor: '#EAF8EE', color: '#157F3F' },
   badgeInactive: { backgroundColor: '#F1F2F6', color: '#6B7280' },
 
+  // Buttons
   actions: { flexDirection: 'row', marginTop: 12, gap: 8, justifyContent: 'flex-end' },
   btn: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12 },
   btnPrimary: { backgroundColor: '#2563EB' },
@@ -667,35 +635,93 @@ const styles = StyleSheet.create({
   btnLight: { backgroundColor: '#EEF1F7' },
   btnText: { color: '#fff', fontWeight: '800' },
   btnTextDark: { color: '#0F172A', fontWeight: '800' },
-  btnPrimaryGrad: { backgroundColor: '#4F46E5' },
-  btnInfoGrad: { backgroundColor: '#0EA5E9' },
 
-  modalBackdrop: { flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.35)', justifyContent: 'center', padding: 12 },
-  modalCard: { backgroundColor: '#ffffff', borderRadius: 16, maxHeight: '85%', padding: 12, borderWidth: StyleSheet.hairlineWidth, borderColor: '#ECEEF5' },
+  // Gradient-like buttons (approximation without extra libs)
+  btnPrimaryGrad: { backgroundColor: '#4F46E5' }, // indigo
+  btnInfoGrad: { backgroundColor: '#0EA5E9' }, // sky
 
-  section: { backgroundColor: '#FAFBFF', borderRadius: 12, padding: 12, borderWidth: StyleSheet.hairlineWidth, borderColor: '#E9ECF3', marginTop: 12 },
-  sectionTitle: { fontSize: 14, fontWeight: '900', color: '#111827', marginBottom: 10 },
+  // Modal
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(15, 23, 42, 0.35)',
+    justifyContent: 'center',
+    padding: 16,
+  },
+  modalCard: {
+    backgroundColor: '#ffffff',
+    borderRadius: 16,
+    maxHeight: '85%',
+    padding: 14,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#ECEEF5',
+  },
 
+  // Sections inside modal
+  section: {
+    backgroundColor: '#FAFBFF',
+    borderRadius: 12,
+    padding: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#E9ECF3',
+    marginTop: 12,
+  },
+  sectionTitle: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: '#111827',
+    marginBottom: 10,
+  },
+
+  // Info rows
   infoPair: { marginBottom: 10 },
   infoLabel: { fontSize: 12, color: '#6B7280', marginBottom: 4 },
-  infoValue: { paddingVertical: 10, paddingHorizontal: 12, backgroundColor: '#F5F7FB', borderRadius: 10, color: '#111827', fontSize: 14, lineHeight: 18 },
+  infoValue: {
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    backgroundColor: '#F5F7FB',
+    borderRadius: 10,
+    color: '#111827',
+    fontSize: 14,
+    lineHeight: 18,
+  },
 
-  input: { backgroundColor: '#ffffff', borderWidth: 1, borderColor: '#E3E7EF', borderRadius: 10, paddingHorizontal: 12, paddingVertical: 10, color: '#111827', fontSize: 14, lineHeight: 18 },
+  // Inputs
+  input: {
+    backgroundColor: '#ffffff',
+    borderWidth: 1,
+    borderColor: '#E3E7EF',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    color: '#111827',
+    fontSize: 14,
+    lineHeight: 18,
+  },
+  inputMultiline: {
+    minHeight: 90,
+    textAlignVertical: 'top',
+  },
 
-  segmented: { flexDirection: 'row', backgroundColor: '#EEF1F7', borderRadius: 10, padding: 2, gap: 6 },
-  segment: { flex: 1, backgroundColor: 'transparent', borderRadius: 8, paddingVertical: 8, alignItems: 'center' },
-  segmentActive: { backgroundColor: '#ffffff', borderWidth: StyleSheet.hairlineWidth, borderColor: '#DDE2EA' },
-  segmentText: { color: '#475569', fontWeight: '700' },
-  segmentTextActive: { color: '#111827', fontWeight: '900' },
-
+  // Subjects pills
   pillsRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   pill: { paddingHorizontal: 10, paddingVertical: 6, backgroundColor: '#EBF2FF', borderRadius: 999 },
   pillText: { color: '#2257D6', fontSize: 12, fontWeight: '700' },
 
+  // Attendance list
   attendanceList: { gap: 8 },
-  attendanceItem: { backgroundColor: '#FFFFFF', borderRadius: 10, paddingVertical: 10, paddingHorizontal: 12, borderWidth: StyleSheet.hairlineWidth, borderColor: '#E9ECF3', flexDirection: 'row', justifyContent: 'space-between' },
+  attendanceItem: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#E9ECF3',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
   attendanceMonth: { fontWeight: '800', color: '#111827' },
   attendanceMeta: { color: '#374151', fontWeight: '600' },
 
+  // Modal actions
   modalActions: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 14, gap: 8 },
 });

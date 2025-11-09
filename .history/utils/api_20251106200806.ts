@@ -154,18 +154,6 @@ export const getStudent=async (id: string, token: string): Promise<any> => {
   });
 };
 
-export const putStudent=async (id: string, token: string, payload: any): Promise<any> => {
-  const path = API_CONFIG.ENDPOINTS.STUDENT.replace(':id', id);
-  return apiCall(path, {
-    method: 'PUT',
-    headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-      },
-      body: JSON.stringify(payload),
-  });
-}
-
 export const checkAppVersion = async (): Promise<VersionCheckResponse> => {
   // Directly call backend; avoid external connectivity pre-checks which fail on unstable networks
   return apiCall(API_CONFIG.ENDPOINTS.VERSION_CHECK, {

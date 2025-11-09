@@ -159,12 +159,7 @@ export const putStudent=async (id: string, token: string, payload: any): Promise
   return apiCall(path, {
     method: 'PUT',
     headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-      },
-      body: JSON.stringify(payload),
-  });
-}
+        'Content-Type': 'application
 
 export const checkAppVersion = async (): Promise<VersionCheckResponse> => {
   // Directly call backend; avoid external connectivity pre-checks which fail on unstable networks
