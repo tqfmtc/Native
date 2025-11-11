@@ -18,7 +18,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { API_CONFIG } from '../constants/config';
 import { LoginResponse, getStudent, putStudent, markStudentAttendance } from '../utils/api';
 
-// Types
 type StudentSubject = { _id: string; subject?: { _id: string; name: string } };
 type AttendanceRecord = { month: string; presentDays: number; totalDays: number };
 type RefId = { _id: string; name?: string };
@@ -47,36 +46,20 @@ type Student = {
 
 type TutorResponse = { _id: string; name: string; students?: Student[] };
 
-// Utils
 const buildUrl = (template: string, params: Record<string, string>) =>
   template.replace(/:([A-Za-z_]+)/g, (_, key) => encodeURIComponent(params[key] || ''));
 
-const toId = (val?: RefId | string) => (typeof val === 'string' ? val : (val?._id || undefined));
-
-const todayIso = () => new Date().toISOString().slice(0, 10); // yyyy-mm-dd
-const isoToDdMmYy = (iso: string) => {
-  // yyyy-mm-dd -> dd-mm-yy
-  const [y, m, d] = iso.split('-');
-  return `${d}-${m}-${y.slice(-2)}`;
-};
-
-// Form reducer to avoid recreating whole objects
 type FormAction =
   | { key: keyof Student; value: any }
   | { key: 'schoolInfo'; value: { name?: string; class?: string } }
   | { key: 'guardianInfo'; value: { name?: string; contact?: string } };
 
 function formReducer(state: Partial<Student>, action: FormAction): Partial<Student> {
-  if (action.key === 'schoolInfo') {
-    return { ...state, schoolInfo: { ...(state.schoolInfo || {}), ...action.value } };
-  }
-  if (action.key === 'guardianInfo') {
-    return { ...state, guardianInfo: { ...(state.guardianInfo || {}), ...action.value } };
-  }
+  if (action.key === 'schoolInfo') return { ...state, schoolInfo: { ...(state.schoolInfo || {}), ...action.value } };
+  if (action.key === 'guardianInfo') return { ...state, guardianInfo: { ...(state.guardianInfo || {}), ...action.value } };
   return { ...state, [action.key]: action.value };
 }
 
-// Memoized leaf components to minimize re-renders
 const Field = memo(function Field({
   label,
   value,
@@ -103,7 +86,7 @@ const Field = memo(function Field({
       />
     </View>
   );
-});
+}); [file:368][web:382]
 
 const Segmented = memo(function Segmented({
   label,
@@ -136,7 +119,7 @@ const Segmented = memo(function Segmented({
       </View>
     </View>
   );
-});
+}); [file:368][web:385]
 
 const BinaryToggle = memo(function BinaryToggle({
   label,
@@ -170,7 +153,7 @@ const BinaryToggle = memo(function BinaryToggle({
       </View>
     </View>
   );
-});
+}); [file:368][web:381]
 
 const InfoPair = memo(function InfoPair({ label, value }: { label: string; value?: string }) {
   return (
@@ -179,12 +162,10 @@ const InfoPair = memo(function InfoPair({ label, value }: { label: string; value
       <Text style={styles.infoValue}>{value || '-'}</Text>
     </View>
   );
-});
+}); [file:368][web:344]
 
 const SubjectsBlock = memo(function SubjectsBlock({ subjects }: { subjects?: StudentSubject[] }) {
-  if (!subjects || subjects.length === 0) {
-    return <Text style={styles.mutedCenter}>Empty array currently</Text>;
-  }
+  if (!subjects || subjects.length === 0) return <Text style={styles.mutedCenter}>Empty array currently</Text>;
   return (
     <View style={styles.pillsRow}>
       {subjects.map(s => (
@@ -194,7 +175,7 @@ const SubjectsBlock = memo(function SubjectsBlock({ subjects }: { subjects?: Stu
       ))}
     </View>
   );
-});
+}); [file:368][web:90]
 
 const Section = memo(function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
@@ -203,7 +184,7 @@ const Section = memo(function Section({ title, children }: { title: string; chil
       {children}
     </View>
   );
-});
+}); [file:368][web:90]
 
 interface Props {
   userData: LoginResponse;
@@ -214,22 +195,21 @@ export default function StudentManagement({ userData, onBack }: Props) {
   const [loading, setLoading] = useState(true);
   const [tutor, setTutor] = useState<TutorResponse | null>(null);
   const [students, setStudents] = useState<Student[]>([]);
-  const [fetchError, setFetchError] = useState<string | null>(null);
+  const [fetchError, setFetchError] = useState<string | null>(null); [file:368][web:382]
 
+  // modal + detail
   const [modalVisible, setModalVisible] = useState(false);
   const [modalMode, setModalMode] = useState<'view' | 'edit'>('view');
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
-
   const [studentLoading, setStudentLoading] = useState(false);
   const [studentDetail, setStudentDetail] = useState<Student | null>(null);
-  const [form, dispatch] = useReducer(formReducer, {});
+  const [form, dispatch] = useReducer(formReducer, {}); [file:368][web:385]
 
-  // Attendance modal state
+  // attendance modal
   const [attModalVisible, setAttModalVisible] = useState(false);
   const [attSelections, setAttSelections] = useState<Record<string, boolean>>({});
   const [attSubmitting, setAttSubmitting] = useState(false);
-  const [attIsoDate, setAttIsoDate] = useState(todayIso); // internal yyyy-mm-dd
-  const attDisplayDate = isoToDdMmYy(attIsoDate); // shown to user as dd-mm-yy
+  const [attDate, setAttDate] = useState(() => new Date().toISOString().slice(0, 10)); [file:368][web:385]
 
   const authHeaders = useMemo(
     () => ({
@@ -237,7 +217,7 @@ export default function StudentManagement({ userData, onBack }: Props) {
       Authorization: `Bearer ${userData.token}`,
     }),
     [userData.token]
-  );
+  ); [web:374][web:377]
 
   useEffect(() => {
     const loadTutor = async () => {
@@ -258,7 +238,7 @@ export default function StudentManagement({ userData, onBack }: Props) {
       }
     };
     loadTutor();
-  }, [userData._id, authHeaders]);
+  }, [userData._id, authHeaders]); [file:368][web:374]
 
   const fetchStudent = async (id: string) => {
     setStudentLoading(true);
@@ -285,20 +265,22 @@ export default function StudentManagement({ userData, onBack }: Props) {
     } finally {
       setStudentLoading(false);
     }
-  };
+  }; [file:368][web:382]
 
   const openModal = (mode: 'view' | 'edit', id: string) => {
     setModalMode(mode);
     setSelectedStudentId(id);
     setModalVisible(true);
     void fetchStudent(id);
-  };
+  }; [web:385][web:379]
 
   const closeModal = () => {
     setModalVisible(false);
     setSelectedStudentId(null);
     setStudentDetail(null);
-  };
+  }; [web:385]
+
+  const toId = (val?: RefId | string) => (typeof val === 'string' ? val : (val?._id || undefined)); [file:368]
 
   const handleSave = async () => {
     if (!selectedStudentId) return;
@@ -324,6 +306,7 @@ export default function StudentManagement({ userData, onBack }: Props) {
       subjects: Array.isArray(form.subjects) ? (form.subjects as StudentSubject[]).map(s => s._id) : [],
     };
     try {
+      // ensure JSON body is properly formed in utils/api putStudent
       const updated = await putStudent(selectedStudentId, userData.token, payload);
       setStudentDetail(prev => (prev ? { ...prev, ...updated } : updated));
       setStudents(prev => prev.map(s => (s._id === updated._id ? { ...s, ...updated } : s)));
@@ -332,67 +315,41 @@ export default function StudentManagement({ userData, onBack }: Props) {
     } catch (e: any) {
       Alert.alert('Update Failed', e?.message || 'Unable to update student');
     }
-  };
+  }; [web:374][web:377]
 
-  // Attendance
+  // Attendance button handlers
   const openAttendance = () => {
+    // prefill selections off; keep modal stable
     setAttSelections({});
-    const iso = todayIso();
-    setAttIsoDate(iso);
+    setAttDate(new Date().toISOString().slice(0, 10));
     setAttModalVisible(true);
-  };
+  }; [web:385]
 
   const toggleStudentCheck = (id: string) => {
     setAttSelections(prev => ({ ...prev, [id]: !prev[id] }));
-  };
+  }; [web:90]
 
   const submitAttendance = async () => {
     const selectedIds = Object.keys(attSelections).filter(id => attSelections[id]);
-    if (!attIsoDate || selectedIds.length === 0) {
-      Alert.alert('Required', 'Pick at least one student');
+    if (!attDate || selectedIds.length === 0) {
+      Alert.alert('Required', 'Pick at least one student and ensure date is set');
       return;
     }
     const studentsPayload = selectedIds.map(studentId => ({ studentId, status: 'Present' }));
     try {
       setAttSubmitting(true);
-      await markStudentAttendance({ date: attIsoDate, students: studentsPayload }, userData.token);
-      Alert.alert('Attendance', 'Marked successfully');
+      // controller expects: { date, students: [{studentId, status}] }
+      const res = await markStudentAttendance({ date: attDate, students: studentsPayload }, userData.token);
+      Alert.alert('Attendance', Array.isArray(res) ? `Marked: ${res.length}` : 'Marked');
       setAttModalVisible(false);
     } catch (e: any) {
       Alert.alert('Attendance Failed', e?.message || 'Unable to mark attendance');
     } finally {
       setAttSubmitting(false);
     }
-  };
+  }; [file:368][web:374]
 
-  const renderStudentItem = ({ item }: { item: Student }) => (
-    <View style={styles.card}>
-      <View style={styles.cardHeaderRow}>
-        <Text style={styles.cardTitle}>{item.name}</Text>
-        <Text style={[styles.badge, item.status === 'inactive' ? styles.badgeInactive : styles.badgeActive]}>
-          {item.status || 'active'}
-        </Text>
-      </View>
-      <View style={styles.cardRow}>
-        <Text style={styles.label}>Father</Text>
-        <Text style={styles.value}>{item.fatherName}</Text>
-      </View>
-      <View style={styles.cardRow}>
-        <Text style={styles.label}>Contact</Text>
-        <Text style={styles.value}>{item.contact}</Text>
-      </View>
-      <View style={styles.actions}>
-        <TouchableOpacity style={[styles.btn, styles.btnInfo]} onPress={() => openModal('view', item._id)}>
-          <Text style={styles.btnText}>View</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={[styles.btn, styles.btnPrimary]} onPress={() => openModal('edit', item._id)}>
-          <Text style={styles.btnText}>Edit</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
-
-  const SectionTitle = useCallback(({ t }: { t: string }) => <Text style={styles.sectionTitle}>{t}</Text>, []);
+  const SectionTitle = useCallback(({ t }: { t: string }) => <Text style={styles.sectionTitle}>{t}</Text>, []); [web:344]
 
   const formatMonthPretty = (iso: string) => {
     try {
@@ -407,7 +364,7 @@ export default function StudentManagement({ userData, onBack }: Props) {
       if (!isNaN(d.valueOf())) return d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
     } catch {}
     return iso || '-';
-  };
+  }; [web:344]
 
   const renderModalBody = () => {
     const editable = modalMode === 'edit';
@@ -515,31 +472,35 @@ export default function StudentManagement({ userData, onBack }: Props) {
         </View>
       </ScrollView>
     );
-  };
+  }; [file:368][web:379]
 
   return (
     <>
       <StatusBar translucent backgroundColor="transparent" barStyle="dark-content" />
       <SafeAreaView edges={['bottom']} style={styles.root}>
-        {/* Top bar with nav + attendance button */}
-        <View style={styles.topBar}>
-          {onBack ? (
-            <TouchableOpacity onPress={onBack}><Text style={styles.backText}>← Back</Text></TouchableOpacity>
-          ) : (<View style={{ width: 48 }} />)}
-          <TouchableOpacity onPress={openAttendance} style={styles.attButtonPill}>
-            <Text style={styles.attButtonPillText}>Mark Attendance</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Header titles below top bar */}
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Students</Text>
+          <View style={styles.headerRow}>
+            {onBack ? (
+              <TouchableOpacity onPress={onBack}><Text style={styles.backText}>← Back</Text></TouchableOpacity>
+            ) : (<View style={{ width: 48 }} />)}
+            <Text style={styles.headerTitle}>Students</Text>
+            <View style={{ width: 48 }} />
+          </View>
           <Text style={styles.headerSub}>Tutor: {tutor?.name || userData.name || 'Unknown'}</Text>
         </View>
 
-        {/* Body */}
+        {/* Top actions */}
+        <View style={styles.topActionsRow}>
+          <TouchableOpacity onPress={openAttendance} style={styles.attButton}>
+            <Text style={styles.attButtonText}>Mark Attendance (Green)</Text>
+          </TouchableOpacity>
+        </View>
+
         {loading ? (
-          <View style={styles.center}><ActivityIndicator size="large" color="#5B7CFF" /><Text style={styles.muted}>Loading students...</Text></View>
+          <View style={styles.center}>
+            <ActivityIndicator size="large" color="#5B7CFF" />
+            <Text style={styles.muted}>Loading students...</Text>
+          </View>
         ) : fetchError ? (
           <View style={styles.center}><Text style={styles.errorText}>{fetchError}</Text></View>
         ) : (
@@ -568,13 +529,16 @@ export default function StudentManagement({ userData, onBack }: Props) {
             <View style={styles.modalBackdrop}>
               <View style={styles.modalCard}>
                 <Text style={styles.modalTitle}>Mark Attendance</Text>
-
-                {/* Read-only date in dd-mm-yy */}
                 <View style={styles.infoPair}>
-                  <Text style={styles.infoLabel}>Date</Text>
-                  <Text style={styles.infoValue}>{attDisplayDate}</Text>
+                  <Text style={styles.infoLabel}>Date (YYYY-MM-DD)</Text>
+                  <TextInput
+                    style={styles.input}
+                    value={attDate}
+                    onChangeText={setAttDate}
+                    placeholder="YYYY-MM-DD"
+                    placeholderTextColor="#9AA0A6"
+                  />
                 </View>
-
                 <View style={styles.section}>
                   <Text style={styles.sectionTitle}>Students</Text>
                   <View style={{ maxHeight: 320 }}>
@@ -593,7 +557,6 @@ export default function StudentManagement({ userData, onBack }: Props) {
                     </ScrollView>
                   </View>
                 </View>
-
                 <View style={styles.modalActions}>
                   <TouchableOpacity style={[styles.btn, styles.btnLight]} onPress={() => setAttModalVisible(false)}>
                     <Text style={styles.btnTextDark}>Cancel</Text>
@@ -611,57 +574,53 @@ export default function StudentManagement({ userData, onBack }: Props) {
   );
 }
 
-// Styles
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#F6F7FB' },
 
-  // New top bar (back + mark attendance)
-  topBar: {
-    backgroundColor: '#ffffff',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#E8EAF0',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    minHeight: 40,
-  },
-
-  // Header titles area
   header: {
     backgroundColor: '#ffffff',
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: '#E8EAF0',
-    paddingTop: 8,
-    paddingBottom: 8,
-    paddingHorizontal: 12,
-  },
-  backText: { color: '#2563EB', fontSize: 14, fontWeight: '700' },
-  attButtonPill: {
-    backgroundColor: '#22C55E',
-    borderRadius: 999,
     paddingVertical: 8,
     paddingHorizontal: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 2,
   },
-  attButtonPillText: { color: '#fff', fontWeight: '900', fontSize: 13 },
-
+  headerRow: { flexDirection: 'row', alignItems: 'center', minHeight: 34, justifyContent: 'space-between' },
+  backText: { color: '#2563EB', fontSize: 14, fontWeight: '700' },
   headerTitle: { fontSize: 18, fontWeight: '800', color: '#0F172A', lineHeight: 20, textAlign: 'center' },
   headerSub: { fontSize: 12, color: '#6B7280', textAlign: 'center', lineHeight: 14, marginTop: 2 },
+
+  topActionsRow: { paddingHorizontal: 16, paddingTop: 10 },
+  attButton: {
+    backgroundColor: '#22C55E',
+    borderRadius: 12,
+    paddingVertical: 12,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+  },
+  attButtonText: { color: '#fff', fontWeight: '900', fontSize: 16 },
 
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   muted: { color: '#6B7280' },
   mutedCenter: { color: '#6B7280', textAlign: 'center' },
   errorText: { color: '#D32F2F' },
 
-  card: { backgroundColor: '#FFFFFF', borderRadius: 14, padding: 14, marginBottom: 12, shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 2, borderWidth: StyleSheet.hairlineWidth, borderColor: '#ECEEF5' },
+  card: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 2,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#ECEEF5',
+  },
   cardHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   cardTitle: { fontSize: 16, fontWeight: '800', color: '#111827' },
   cardRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5 },
@@ -713,10 +672,4 @@ const styles = StyleSheet.create({
 
   modalActions: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 14, gap: 8 },
 
-  // Attendance check rows
-  checkRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10 },
-  checkRowName: { color: '#0F172A', fontSize: 15, fontWeight: '700' },
-  checkbox: { width: 24, height: 24, borderRadius: 6, borderWidth: 2, borderColor: '#CBD5E1', alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' },
-  checkboxChecked: { backgroundColor: '#22C55E', borderColor: '#22C55E' },
-  checkboxTick: { color: '#fff', fontWeight: '900' },
 });

@@ -51,15 +51,6 @@ type TutorResponse = { _id: string; name: string; students?: Student[] };
 const buildUrl = (template: string, params: Record<string, string>) =>
   template.replace(/:([A-Za-z_]+)/g, (_, key) => encodeURIComponent(params[key] || ''));
 
-const toId = (val?: RefId | string) => (typeof val === 'string' ? val : (val?._id || undefined));
-
-const todayIso = () => new Date().toISOString().slice(0, 10); // yyyy-mm-dd
-const isoToDdMmYy = (iso: string) => {
-  // yyyy-mm-dd -> dd-mm-yy
-  const [y, m, d] = iso.split('-');
-  return `${d}-${m}-${y.slice(-2)}`;
-};
-
 // Form reducer to avoid recreating whole objects
 type FormAction =
   | { key: keyof Student; value: any }
@@ -228,8 +219,7 @@ export default function StudentManagement({ userData, onBack }: Props) {
   const [attModalVisible, setAttModalVisible] = useState(false);
   const [attSelections, setAttSelections] = useState<Record<string, boolean>>({});
   const [attSubmitting, setAttSubmitting] = useState(false);
-  const [attIsoDate, setAttIsoDate] = useState(todayIso); // internal yyyy-mm-dd
-  const attDisplayDate = isoToDdMmYy(attIsoDate); // shown to user as dd-mm-yy
+  const [attDate, setAttDate] = useState(() => new Date().toISOString().slice(0, 10));
 
   const authHeaders = useMemo(
     () => ({
@@ -300,6 +290,8 @@ export default function StudentManagement({ userData, onBack }: Props) {
     setStudentDetail(null);
   };
 
+  const toId = (val?: RefId | string) => (typeof val === 'string' ? val : (val?._id || undefined));
+
   const handleSave = async () => {
     if (!selectedStudentId) return;
     if (!form.name || !form.fatherName || !form.contact) {
@@ -337,8 +329,7 @@ export default function StudentManagement({ userData, onBack }: Props) {
   // Attendance
   const openAttendance = () => {
     setAttSelections({});
-    const iso = todayIso();
-    setAttIsoDate(iso);
+    setAttDate(new Date().toISOString().slice(0, 10));
     setAttModalVisible(true);
   };
 
@@ -348,14 +339,14 @@ export default function StudentManagement({ userData, onBack }: Props) {
 
   const submitAttendance = async () => {
     const selectedIds = Object.keys(attSelections).filter(id => attSelections[id]);
-    if (!attIsoDate || selectedIds.length === 0) {
-      Alert.alert('Required', 'Pick at least one student');
+    if (!attDate || selectedIds.length === 0) {
+      Alert.alert('Required', 'Pick at least one student and ensure date is set');
       return;
     }
     const studentsPayload = selectedIds.map(studentId => ({ studentId, status: 'Present' }));
     try {
       setAttSubmitting(true);
-      await markStudentAttendance({ date: attIsoDate, students: studentsPayload }, userData.token);
+      await markStudentAttendance({ date: attDate, students: studentsPayload }, userData.token);
       Alert.alert('Attendance', 'Marked successfully');
       setAttModalVisible(false);
     } catch (e: any) {
@@ -521,20 +512,23 @@ export default function StudentManagement({ userData, onBack }: Props) {
     <>
       <StatusBar translucent backgroundColor="transparent" barStyle="dark-content" />
       <SafeAreaView edges={['bottom']} style={styles.root}>
-        {/* Top bar with nav + attendance button */}
-        <View style={styles.topBar}>
-          {onBack ? (
-            <TouchableOpacity onPress={onBack}><Text style={styles.backText}>← Back</Text></TouchableOpacity>
-          ) : (<View style={{ width: 48 }} />)}
-          <TouchableOpacity onPress={openAttendance} style={styles.attButtonPill}>
-            <Text style={styles.attButtonPillText}>Mark Attendance</Text>
-          </TouchableOpacity>
+        {/* Header */}
+        <View style={styles.header}>
+          <View style={styles.headerRow}>
+            {onBack ? (
+              <TouchableOpacity onPress={onBack}><Text style={styles.backText}>← Back</Text></TouchableOpacity>
+            ) : (<View style={{ width: 48 }} />)}
+            <Text style={styles.headerTitle}>Students</Text>
+            <View style={{ width: 48 }} />
+          </View>
+          <Text style={styles.headerSub}>Tutor: {tutor?.name || userData.name || 'Unknown'}</Text>
         </View>
 
-        {/* Header titles below top bar */}
-        <View style={styles.header}>
-          <Text style={styles.headerTitle}>Students</Text>
-          <Text style={styles.headerSub}>Tutor: {tutor?.name || userData.name || 'Unknown'}</Text>
+        {/* Top actions */}
+        <View style={styles.topActionsRow}>
+          <TouchableOpacity onPress={openAttendance} style={styles.attButton}>
+            <Text style={styles.attButtonText}>Mark Attendance (Green)</Text>
+          </TouchableOpacity>
         </View>
 
         {/* Body */}
@@ -568,13 +562,10 @@ export default function StudentManagement({ userData, onBack }: Props) {
             <View style={styles.modalBackdrop}>
               <View style={styles.modalCard}>
                 <Text style={styles.modalTitle}>Mark Attendance</Text>
-
-                {/* Read-only date in dd-mm-yy */}
                 <View style={styles.infoPair}>
-                  <Text style={styles.infoLabel}>Date</Text>
-                  <Text style={styles.infoValue}>{attDisplayDate}</Text>
+                  <Text style={styles.infoLabel}>Date (YYYY-MM-DD)</Text>
+                  <TextInput style={styles.input} value={attDate} onChangeText={setAttDate} placeholder="YYYY-MM-DD" placeholderTextColor="#9AA0A6" />
                 </View>
-
                 <View style={styles.section}>
                   <Text style={styles.sectionTitle}>Students</Text>
                   <View style={{ maxHeight: 320 }}>
@@ -593,7 +584,6 @@ export default function StudentManagement({ userData, onBack }: Props) {
                     </ScrollView>
                   </View>
                 </View>
-
                 <View style={styles.modalActions}>
                   <TouchableOpacity style={[styles.btn, styles.btnLight]} onPress={() => setAttModalVisible(false)}>
                     <Text style={styles.btnTextDark}>Cancel</Text>
@@ -615,46 +605,15 @@ export default function StudentManagement({ userData, onBack }: Props) {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#F6F7FB' },
 
-  // New top bar (back + mark attendance)
-  topBar: {
-    backgroundColor: '#ffffff',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#E8EAF0',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    minHeight: 40,
-  },
-
-  // Header titles area
-  header: {
-    backgroundColor: '#ffffff',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#E8EAF0',
-    paddingTop: 8,
-    paddingBottom: 8,
-    paddingHorizontal: 12,
-  },
+  header: { backgroundColor: '#ffffff', borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: '#E8EAF0', paddingVertical: 8, paddingHorizontal: 12 },
+  headerRow: { flexDirection: 'row', alignItems: 'center', minHeight: 34, justifyContent: 'space-between' },
   backText: { color: '#2563EB', fontSize: 14, fontWeight: '700' },
-  attButtonPill: {
-    backgroundColor: '#22C55E',
-    borderRadius: 999,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 2,
-  },
-  attButtonPillText: { color: '#fff', fontWeight: '900', fontSize: 13 },
-
   headerTitle: { fontSize: 18, fontWeight: '800', color: '#0F172A', lineHeight: 20, textAlign: 'center' },
   headerSub: { fontSize: 12, color: '#6B7280', textAlign: 'center', lineHeight: 14, marginTop: 2 },
+
+  topActionsRow: { paddingHorizontal: 16, paddingTop: 10 },
+  attButton: { backgroundColor: '#22C55E', borderRadius: 12, paddingVertical: 12, alignItems: 'center', shadowColor: '#000', shadowOpacity: 0.08, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 2 },
+  attButtonText: { color: '#fff', fontWeight: '900', fontSize: 16 },
 
   center: { flex: 1, justifyContent: 'center', alignItems: 'center' },
   muted: { color: '#6B7280' },

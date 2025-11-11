@@ -55,28 +55,23 @@ const toId = (val?: RefId | string) => (typeof val === 'string' ? val : (val?._i
 
 const todayIso = () => new Date().toISOString().slice(0, 10); // yyyy-mm-dd
 const isoToDdMmYy = (iso: string) => {
-  // yyyy-mm-dd -> dd-mm-yy
   const [y, m, d] = iso.split('-');
   return `${d}-${m}-${y.slice(-2)}`;
 };
 
-// Form reducer to avoid recreating whole objects
+// Form reducer
 type FormAction =
   | { key: keyof Student; value: any }
   | { key: 'schoolInfo'; value: { name?: string; class?: string } }
   | { key: 'guardianInfo'; value: { name?: string; contact?: string } };
 
 function formReducer(state: Partial<Student>, action: FormAction): Partial<Student> {
-  if (action.key === 'schoolInfo') {
-    return { ...state, schoolInfo: { ...(state.schoolInfo || {}), ...action.value } };
-  }
-  if (action.key === 'guardianInfo') {
-    return { ...state, guardianInfo: { ...(state.guardianInfo || {}), ...action.value } };
-  }
+  if (action.key === 'schoolInfo') return { ...state, schoolInfo: { ...(state.schoolInfo || {}), ...action.value } };
+  if (action.key === 'guardianInfo') return { ...state, guardianInfo: { ...(state.guardianInfo || {}), ...action.value } };
   return { ...state, [action.key]: action.value };
 }
 
-// Memoized leaf components to minimize re-renders
+// Leaf components
 const Field = memo(function Field({
   label,
   value,
@@ -207,10 +202,10 @@ const Section = memo(function Section({ title, children }: { title: string; chil
 
 interface Props {
   userData: LoginResponse;
-  onBack?: () => void;
+  onBack?: () => void; // kept in props type but not rendered
 }
 
-export default function StudentManagement({ userData, onBack }: Props) {
+export default function StudentManagement({ userData }: Props) {
   const [loading, setLoading] = useState(true);
   const [tutor, setTutor] = useState<TutorResponse | null>(null);
   const [students, setStudents] = useState<Student[]>([]);
@@ -228,8 +223,8 @@ export default function StudentManagement({ userData, onBack }: Props) {
   const [attModalVisible, setAttModalVisible] = useState(false);
   const [attSelections, setAttSelections] = useState<Record<string, boolean>>({});
   const [attSubmitting, setAttSubmitting] = useState(false);
-  const [attIsoDate, setAttIsoDate] = useState(todayIso); // internal yyyy-mm-dd
-  const attDisplayDate = isoToDdMmYy(attIsoDate); // shown to user as dd-mm-yy
+  const [attIsoDate, setAttIsoDate] = useState(todayIso()); // internal yyyy-mm-dd
+  const attDisplayDate = isoToDdMmYy(attIsoDate); // dd-mm-yy shown
 
   const authHeaders = useMemo(
     () => ({
@@ -337,8 +332,7 @@ export default function StudentManagement({ userData, onBack }: Props) {
   // Attendance
   const openAttendance = () => {
     setAttSelections({});
-    const iso = todayIso();
-    setAttIsoDate(iso);
+    setAttIsoDate(todayIso());
     setAttModalVisible(true);
   };
 
@@ -521,17 +515,14 @@ export default function StudentManagement({ userData, onBack }: Props) {
     <>
       <StatusBar translucent backgroundColor="transparent" barStyle="dark-content" />
       <SafeAreaView edges={['bottom']} style={styles.root}>
-        {/* Top bar with nav + attendance button */}
+        {/* Very top bar: only Mark Attendance (no nav toggle/back) */}
         <View style={styles.topBar}>
-          {onBack ? (
-            <TouchableOpacity onPress={onBack}><Text style={styles.backText}>← Back</Text></TouchableOpacity>
-          ) : (<View style={{ width: 48 }} />)}
           <TouchableOpacity onPress={openAttendance} style={styles.attButtonPill}>
             <Text style={styles.attButtonPillText}>Mark Attendance</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Header titles below top bar */}
+        {/* Header titles */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Students</Text>
           <Text style={styles.headerSub}>Tutor: {tutor?.name || userData.name || 'Unknown'}</Text>
@@ -615,29 +606,16 @@ export default function StudentManagement({ userData, onBack }: Props) {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#F6F7FB' },
 
-  // New top bar (back + mark attendance)
+  // Very top bar (only attendance button)
   topBar: {
     backgroundColor: '#ffffff',
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: '#E8EAF0',
     paddingVertical: 8,
     paddingHorizontal: 12,
-    flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    minHeight: 40,
+    justifyContent: 'flex-start',
   },
-
-  // Header titles area
-  header: {
-    backgroundColor: '#ffffff',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#E8EAF0',
-    paddingTop: 8,
-    paddingBottom: 8,
-    paddingHorizontal: 12,
-  },
-  backText: { color: '#2563EB', fontSize: 14, fontWeight: '700' },
   attButtonPill: {
     backgroundColor: '#22C55E',
     borderRadius: 999,
@@ -653,6 +631,15 @@ const styles = StyleSheet.create({
   },
   attButtonPillText: { color: '#fff', fontWeight: '900', fontSize: 13 },
 
+  // Header titles area
+  header: {
+    backgroundColor: '#ffffff',
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: '#E8EAF0',
+    paddingTop: 8,
+    paddingBottom: 8,
+    paddingHorizontal: 12,
+  },
   headerTitle: { fontSize: 18, fontWeight: '800', color: '#0F172A', lineHeight: 20, textAlign: 'center' },
   headerSub: { fontSize: 12, color: '#6B7280', textAlign: 'center', lineHeight: 14, marginTop: 2 },
 

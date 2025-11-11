@@ -5,7 +5,6 @@ export const API_CONFIG = {
     TUTOR:'/tutors/:id',
     STUDENT: '/students/:id',
     CREATESTUDENT: '/students/',
-    MARKSTUDENTATTENDANCE: '/students/markDailyAttendance',
     BUTTONSTATUS: '/attendance/buttonStatus',
     ATTENDANCE: '/tutors/attendance',
     ATTENDANCE_RECENT: '/attendance/recent',

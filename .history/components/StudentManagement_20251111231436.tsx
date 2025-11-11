@@ -16,11 +16,13 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { API_CONFIG } from '../constants/config';
-import { LoginResponse, getStudent, putStudent, markStudentAttendance } from '../utils/api';
+import { LoginResponse, getStudent, putStudent } from '../utils/api';
 
 // Types
 type StudentSubject = { _id: string; subject?: { _id: string; name: string } };
+
 type AttendanceRecord = { month: string; presentDays: number; totalDays: number };
+
 type RefId = { _id: string; name?: string };
 
 type Student = {
@@ -50,15 +52,6 @@ type TutorResponse = { _id: string; name: string; students?: Student[] };
 // Utils
 const buildUrl = (template: string, params: Record<string, string>) =>
   template.replace(/:([A-Za-z_]+)/g, (_, key) => encodeURIComponent(params[key] || ''));
-
-const toId = (val?: RefId | string) => (typeof val === 'string' ? val : (val?._id || undefined));
-
-const todayIso = () => new Date().toISOString().slice(0, 10); // yyyy-mm-dd
-const isoToDdMmYy = (iso: string) => {
-  // yyyy-mm-dd -> dd-mm-yy
-  const [y, m, d] = iso.split('-');
-  return `${d}-${m}-${y.slice(-2)}`;
-};
 
 // Form reducer to avoid recreating whole objects
 type FormAction =
@@ -224,13 +217,6 @@ export default function StudentManagement({ userData, onBack }: Props) {
   const [studentDetail, setStudentDetail] = useState<Student | null>(null);
   const [form, dispatch] = useReducer(formReducer, {});
 
-  // Attendance modal state
-  const [attModalVisible, setAttModalVisible] = useState(false);
-  const [attSelections, setAttSelections] = useState<Record<string, boolean>>({});
-  const [attSubmitting, setAttSubmitting] = useState(false);
-  const [attIsoDate, setAttIsoDate] = useState(todayIso); // internal yyyy-mm-dd
-  const attDisplayDate = isoToDdMmYy(attIsoDate); // shown to user as dd-mm-yy
-
   const authHeaders = useMemo(
     () => ({
       'Content-Type': 'application/json',
@@ -265,6 +251,7 @@ export default function StudentManagement({ userData, onBack }: Props) {
     try {
       const data: Student = await getStudent(id, userData.token);
       setStudentDetail(data);
+      // seed reducer state with one dispatch per key to minimize churn
       dispatch({ key: 'name', value: data.name });
       dispatch({ key: 'fatherName', value: data.fatherName });
       dispatch({ key: 'contact', value: data.contact });
@@ -298,7 +285,10 @@ export default function StudentManagement({ userData, onBack }: Props) {
     setModalVisible(false);
     setSelectedStudentId(null);
     setStudentDetail(null);
+    // leave form reducer as-is; it won’t matter when modal is closed
   };
+
+  const toId = (val?: RefId | string) => (typeof val === 'string' ? val : (val?._id || undefined));
 
   const handleSave = async () => {
     if (!selectedStudentId) return;
@@ -306,6 +296,7 @@ export default function StudentManagement({ userData, onBack }: Props) {
       Alert.alert('Validation', 'Name, Father Name and Contact are required');
       return;
     }
+
     const payload: any = {
       name: String(form.name).trim(),
       fatherName: String(form.fatherName).trim(),
@@ -317,51 +308,25 @@ export default function StudentManagement({ userData, onBack }: Props) {
       isOrphan: !!form.isOrphan,
       isNonSchoolGoing: !!form.isNonSchoolGoing,
       remarks: (form.remarks as string) || '',
-      guardianInfo: form.isOrphan ? { name: form.guardianInfo?.name || '', contact: form.guardianInfo?.contact || '' } : undefined,
-      schoolInfo: !form.isNonSchoolGoing ? { name: form.schoolInfo?.name || '', class: form.schoolInfo?.class || '' } : undefined,
+      guardianInfo: form.isOrphan
+        ? { name: form.guardianInfo?.name || '', contact: form.guardianInfo?.contact || '' }
+        : undefined,
+      schoolInfo: !form.isNonSchoolGoing
+        ? { name: form.schoolInfo?.name || '', class: form.schoolInfo?.class || '' }
+        : undefined,
       assignedCenter: toId(form.assignedCenter as any),
       assignedTutor: toId(form.assignedTutor as any),
       subjects: Array.isArray(form.subjects) ? (form.subjects as StudentSubject[]).map(s => s._id) : [],
     };
+
     try {
       const updated = await putStudent(selectedStudentId, userData.token, payload);
       setStudentDetail(prev => (prev ? { ...prev, ...updated } : updated));
       setStudents(prev => prev.map(s => (s._id === updated._id ? { ...s, ...updated } : s)));
       Alert.alert('Success', 'Student updated successfully');
-      setModalMode('view');
+      setModalMode('view'); // do not close modal; minimal state change
     } catch (e: any) {
       Alert.alert('Update Failed', e?.message || 'Unable to update student');
-    }
-  };
-
-  // Attendance
-  const openAttendance = () => {
-    setAttSelections({});
-    const iso = todayIso();
-    setAttIsoDate(iso);
-    setAttModalVisible(true);
-  };
-
-  const toggleStudentCheck = (id: string) => {
-    setAttSelections(prev => ({ ...prev, [id]: !prev[id] }));
-  };
-
-  const submitAttendance = async () => {
-    const selectedIds = Object.keys(attSelections).filter(id => attSelections[id]);
-    if (!attIsoDate || selectedIds.length === 0) {
-      Alert.alert('Required', 'Pick at least one student');
-      return;
-    }
-    const studentsPayload = selectedIds.map(studentId => ({ studentId, status: 'Present' }));
-    try {
-      setAttSubmitting(true);
-      await markStudentAttendance({ date: attIsoDate, students: studentsPayload }, userData.token);
-      Alert.alert('Attendance', 'Marked successfully');
-      setAttModalVisible(false);
-    } catch (e: any) {
-      Alert.alert('Attendance Failed', e?.message || 'Unable to mark attendance');
-    } finally {
-      setAttSubmitting(false);
     }
   };
 
@@ -404,34 +369,68 @@ export default function StudentManagement({ userData, onBack }: Props) {
         return d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
       }
       const d = new Date(iso);
-      if (!isNaN(d.valueOf())) return d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+      if (!isNaN(d.valueOf())) {
+        return d.toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+      }
     } catch {}
     return iso || '-';
   };
 
   const renderModalBody = () => {
     const editable = modalMode === 'edit';
-    if (studentLoading) return <View style={styles.center}><ActivityIndicator size="large" color="#5B7CFF" /></View>;
+
+    if (studentLoading) {
+      return (
+        <View style={styles.center}>
+          <ActivityIndicator size="large" color="#5B7CFF" />
+        </View>
+      );
+    }
     if (!studentDetail) return <Text style={styles.mutedCenter}>No data</Text>;
-    const joinDate = studentDetail.joiningDate || studentDetail.createdAt
-      ? new Date(studentDetail.joiningDate || studentDetail.createdAt!).toLocaleDateString('en-IN')
-      : '-';
+
+    const joinDate =
+      studentDetail.joiningDate || studentDetail.createdAt
+        ? new Date(studentDetail.joiningDate || studentDetail.createdAt!).toLocaleDateString('en-IN')
+        : '-';
+
     return (
       <ScrollView contentContainerStyle={{ paddingBottom: 16 }} keyboardShouldPersistTaps="handled">
+        {/* Personal Information */}
         <Section title="Personal Information">
           {editable ? (
             <>
               <Field label="Name" value={form.name as string} onChangeText={t => dispatch({ key: 'name', value: t })} />
-              <Field label="Father's Name" value={form.fatherName as string} onChangeText={t => dispatch({ key: 'fatherName', value: t })} />
-              <Field label="Contact" value={form.contact as string} onChangeText={t => dispatch({ key: 'contact', value: t })} keyboardType="phone-pad" />
+              <Field
+                label="Father's Name"
+                value={form.fatherName as string}
+                onChangeText={t => dispatch({ key: 'fatherName', value: t })}
+              />
+              <Field
+                label="Contact"
+                value={form.contact as string}
+                onChangeText={t => dispatch({ key: 'contact', value: t })}
+                keyboardType="phone-pad"
+              />
               <Segmented
                 label="Gender"
                 value={form.gender as string}
                 onChange={v => dispatch({ key: 'gender', value: v as 'Male' | 'Female' })}
-                options={[{ label: 'Male', value: 'Male' }, { label: 'Female', value: 'Female' }]}
+                options={[
+                  { label: 'Male', value: 'Male' },
+                  { label: 'Female', value: 'Female' },
+                ]}
               />
-              <Field label="Medium" value={form.medium as string} onChangeText={t => dispatch({ key: 'medium', value: t })} />
-              <Field label="Aadhar Number" value={form.aadharNumber as string} onChangeText={t => dispatch({ key: 'aadharNumber', value: t })} keyboardType="numeric" />
+              <Field
+                label="Medium"
+                value={form.medium as string}
+                onChangeText={t => dispatch({ key: 'medium', value: t })}
+              />
+              <Field
+                label="Aadhar Number"
+                value={form.aadharNumber as string}
+                onChangeText={t => dispatch({ key: 'aadharNumber', value: t })}
+                keyboardType="numeric"
+              />
             </>
           ) : (
             <>
@@ -444,6 +443,8 @@ export default function StudentManagement({ userData, onBack }: Props) {
             </>
           )}
         </Section>
+
+        {/* School Information */}
         <Section title="School Information">
           {editable ? (
             <>
@@ -465,33 +466,57 @@ export default function StudentManagement({ userData, onBack }: Props) {
             </>
           )}
         </Section>
+
+        {/* Subjects */}
         <Section title="Subjects">
-          {editable ? <SubjectsBlock subjects={form.subjects as StudentSubject[]} /> : <SubjectsBlock subjects={studentDetail.subjects} />}
+          {editable ? (
+            <SubjectsBlock subjects={form.subjects as StudentSubject[]} />
+          ) : (
+            <SubjectsBlock subjects={studentDetail.subjects} />
+          )}
         </Section>
+
+        {/* Non-School Going */}
         <Section title="Non-School Going">
           {editable ? (
-            <BinaryToggle label="Non-School Going" value={!!form.isNonSchoolGoing} onChange={v => dispatch({ key: 'isNonSchoolGoing', value: v })} />
+            <BinaryToggle
+              label="Non-School Going"
+              value={!!form.isNonSchoolGoing}
+              onChange={v => dispatch({ key: 'isNonSchoolGoing', value: v })}
+            />
           ) : (
             <InfoPair label="Non-School Going" value={studentDetail.isNonSchoolGoing ? 'Yes' : 'No'} />
           )}
         </Section>
+
+        {/* Is Orphan */}
         <Section title="Is Orphan">
           {editable ? (
-            <BinaryToggle label="Is Orphan" value={!!form.isOrphan} onChange={v => dispatch({ key: 'isOrphan', value: v })} />
+            <BinaryToggle
+              label="Is Orphan"
+              value={!!form.isOrphan}
+              onChange={v => dispatch({ key: 'isOrphan', value: v })}
+            />
           ) : (
             <InfoPair label="Is Orphan" value={studentDetail.isOrphan ? 'Yes' : 'No'} />
           )}
         </Section>
+
+        {/* Joining Date */}
         <Section title="Joining Date">
           <InfoPair label="Joining Date" value={joinDate} />
         </Section>
+
+        {/* Attendance History */}
         <Section title="Attendance History">
           {studentDetail.attendance && studentDetail.attendance.length > 0 ? (
             <View style={styles.attendanceList}>
               {studentDetail.attendance.map((rec, idx) => (
                 <View key={`${rec.month}-${idx}`} style={styles.attendanceItem}>
                   <Text style={styles.attendanceMonth}>{formatMonthPretty(rec.month)}</Text>
-                  <Text style={styles.attendanceMeta}>{rec.presentDays}/{rec.totalDays} days</Text>
+                  <Text style={styles.attendanceMeta}>
+                    {rec.presentDays}/{rec.totalDays} days
+                  </Text>
                 </View>
               ))}
             </View>
@@ -499,6 +524,8 @@ export default function StudentManagement({ userData, onBack }: Props) {
             <Text style={styles.mutedCenter}>No attendance records found</Text>
           )}
         </Section>
+
+        {/* Actions */}
         <View style={styles.modalActions}>
           <TouchableOpacity style={[styles.btn, styles.btnLight]} onPress={closeModal}>
             <Text style={styles.btnTextDark}>Close</Text>
@@ -508,7 +535,10 @@ export default function StudentManagement({ userData, onBack }: Props) {
               <Text style={styles.btnText}>Save</Text>
             </TouchableOpacity>
           ) : (
-            <TouchableOpacity style={[styles.btn, styles.btnInfoGrad]} onPress={() => setModalMode('edit')}>
+            <TouchableOpacity
+              style={[styles.btn, styles.btnInfoGrad]}
+              onPress={() => setModalMode('edit')}
+            >
               <Text style={styles.btnText}>Edit</Text>
             </TouchableOpacity>
           )}
@@ -521,87 +551,62 @@ export default function StudentManagement({ userData, onBack }: Props) {
     <>
       <StatusBar translucent backgroundColor="transparent" barStyle="dark-content" />
       <SafeAreaView edges={['bottom']} style={styles.root}>
-        {/* Top bar with nav + attendance button */}
-        <View style={styles.topBar}>
-          {onBack ? (
-            <TouchableOpacity onPress={onBack}><Text style={styles.backText}>← Back</Text></TouchableOpacity>
-          ) : (<View style={{ width: 48 }} />)}
-          <TouchableOpacity onPress={openAttendance} style={styles.attButtonPill}>
-            <Text style={styles.attButtonPillText}>Mark Attendance</Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Header titles below top bar */}
+        {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.headerTitle}>Students</Text>
+          <View style={styles.headerRow}>
+            {onBack ? (
+              <TouchableOpacity onPress={onBack}>
+                <Text style={styles.backText}>← Back</Text>
+              </TouchableOpacity>
+            ) : (
+              <View style={{ width: 48 }} />
+            )}
+            <Text style={styles.headerTitle}>Students</Text>
+            <View style={{ width: 48 }} />
+          </View>
           <Text style={styles.headerSub}>Tutor: {tutor?.name || userData.name || 'Unknown'}</Text>
         </View>
 
         {/* Body */}
         {loading ? (
-          <View style={styles.center}><ActivityIndicator size="large" color="#5B7CFF" /><Text style={styles.muted}>Loading students...</Text></View>
+          <View style={styles.center}>
+            <ActivityIndicator size="large" color="#5B7CFF" />
+            <Text style={styles.muted}>Loading students...</Text>
+          </View>
         ) : fetchError ? (
-          <View style={styles.center}><Text style={styles.errorText}>{fetchError}</Text></View>
+          <View style={styles.center}>
+            <Text style={styles.errorText}>{fetchError}</Text>
+          </View>
         ) : (
           <FlatList
             data={students}
             keyExtractor={item => item._id}
             renderItem={renderStudentItem}
-            contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 16, flexGrow: 1, justifyContent: students.length === 0 ? 'center' : 'flex-start' }}
-            ListEmptyComponent={<View style={styles.center}><Text style={styles.muted}>No students found.</Text></View>}
+            contentContainerStyle={{
+              paddingHorizontal: 16,
+              paddingVertical: 16,
+              flexGrow: 1,
+              justifyContent: students.length === 0 ? 'center' : 'flex-start',
+            }}
+            ListEmptyComponent={
+              <View style={styles.center}>
+                <Text style={styles.muted}>No students found.</Text>
+              </View>
+            }
             keyboardShouldPersistTaps="handled"
           />
         )}
 
-        {/* Detail modal */}
+        {/* Keyboard-safe, stable modal */}
         <Modal visible={modalVisible} transparent animationType="fade" onRequestClose={closeModal}>
-          <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={Platform.OS === 'ios' ? 10 : 0}>
-            <View style={styles.modalBackdrop}>
-              <View style={styles.modalCard}>{renderModalBody()}</View>
-            </View>
-          </KeyboardAvoidingView>
-        </Modal>
-
-        {/* Attendance modal */}
-        <Modal visible={attModalVisible} transparent animationType="fade" onRequestClose={() => setAttModalVisible(false)}>
-          <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={Platform.OS === 'ios' ? 10 : 0}>
+          <KeyboardAvoidingView
+            style={{ flex: 1 }}
+            behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+            keyboardVerticalOffset={Platform.OS === 'ios' ? 10 : 0}
+          >
             <View style={styles.modalBackdrop}>
               <View style={styles.modalCard}>
-                <Text style={styles.modalTitle}>Mark Attendance</Text>
-
-                {/* Read-only date in dd-mm-yy */}
-                <View style={styles.infoPair}>
-                  <Text style={styles.infoLabel}>Date</Text>
-                  <Text style={styles.infoValue}>{attDisplayDate}</Text>
-                </View>
-
-                <View style={styles.section}>
-                  <Text style={styles.sectionTitle}>Students</Text>
-                  <View style={{ maxHeight: 320 }}>
-                    <ScrollView keyboardShouldPersistTaps="handled">
-                      {students.map(s => {
-                        const checked = !!attSelections[s._id];
-                        return (
-                          <TouchableOpacity key={s._id} onPress={() => toggleStudentCheck(s._id)} activeOpacity={0.8} style={styles.checkRow}>
-                            <Text style={styles.checkRowName}>{s.name}</Text>
-                            <View style={[styles.checkbox, checked && styles.checkboxChecked]}>
-                              {checked ? <Text style={styles.checkboxTick}>✓</Text> : null}
-                            </View>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </ScrollView>
-                  </View>
-                </View>
-
-                <View style={styles.modalActions}>
-                  <TouchableOpacity style={[styles.btn, styles.btnLight]} onPress={() => setAttModalVisible(false)}>
-                    <Text style={styles.btnTextDark}>Cancel</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity style={[styles.btn, styles.btnGreen]} onPress={submitAttendance} disabled={attSubmitting}>
-                    {attSubmitting ? <ActivityIndicator color="#fff" /> : <Text style={styles.btnText}>Submit Attendance</Text>}
-                  </TouchableOpacity>
-                </View>
+                {renderModalBody()}
               </View>
             </View>
           </KeyboardAvoidingView>
@@ -611,48 +616,19 @@ export default function StudentManagement({ userData, onBack }: Props) {
   );
 }
 
-// Styles
+// Styles (kept from refined version)
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: '#F6F7FB' },
 
-  // New top bar (back + mark attendance)
-  topBar: {
-    backgroundColor: '#ffffff',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: '#E8EAF0',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    minHeight: 40,
-  },
-
-  // Header titles area
   header: {
     backgroundColor: '#ffffff',
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: '#E8EAF0',
-    paddingTop: 8,
-    paddingBottom: 8,
-    paddingHorizontal: 12,
-  },
-  backText: { color: '#2563EB', fontSize: 14, fontWeight: '700' },
-  attButtonPill: {
-    backgroundColor: '#22C55E',
-    borderRadius: 999,
     paddingVertical: 8,
     paddingHorizontal: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 2,
   },
-  attButtonPillText: { color: '#fff', fontWeight: '900', fontSize: 13 },
-
+  headerRow: { flexDirection: 'row', alignItems: 'center', minHeight: 34, justifyContent: 'space-between' },
+  backText: { color: '#2563EB', fontSize: 14, fontWeight: '700' },
   headerTitle: { fontSize: 18, fontWeight: '800', color: '#0F172A', lineHeight: 20, textAlign: 'center' },
   headerSub: { fontSize: 12, color: '#6B7280', textAlign: 'center', lineHeight: 14, marginTop: 2 },
 
@@ -661,7 +637,19 @@ const styles = StyleSheet.create({
   mutedCenter: { color: '#6B7280', textAlign: 'center' },
   errorText: { color: '#D32F2F' },
 
-  card: { backgroundColor: '#FFFFFF', borderRadius: 14, padding: 14, marginBottom: 12, shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 2, borderWidth: StyleSheet.hairlineWidth, borderColor: '#ECEEF5' },
+  card: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 12,
+    shadowColor: '#000',
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 2,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: '#ECEEF5',
+  },
   cardHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
   cardTitle: { fontSize: 16, fontWeight: '800', color: '#111827' },
   cardRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 5 },
@@ -677,7 +665,6 @@ const styles = StyleSheet.create({
   btnPrimary: { backgroundColor: '#2563EB' },
   btnInfo: { backgroundColor: '#5856D6' },
   btnLight: { backgroundColor: '#EEF1F7' },
-  btnGreen: { backgroundColor: '#22C55E' },
   btnText: { color: '#fff', fontWeight: '800' },
   btnTextDark: { color: '#0F172A', fontWeight: '800' },
   btnPrimaryGrad: { backgroundColor: '#4F46E5' },
@@ -685,7 +672,6 @@ const styles = StyleSheet.create({
 
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.35)', justifyContent: 'center', padding: 12 },
   modalCard: { backgroundColor: '#ffffff', borderRadius: 16, maxHeight: '85%', padding: 12, borderWidth: StyleSheet.hairlineWidth, borderColor: '#ECEEF5' },
-  modalTitle: { fontSize: 16, fontWeight: '900', color: '#111827', textAlign: 'center', marginBottom: 8 },
 
   section: { backgroundColor: '#FAFBFF', borderRadius: 12, padding: 12, borderWidth: StyleSheet.hairlineWidth, borderColor: '#E9ECF3', marginTop: 12 },
   sectionTitle: { fontSize: 14, fontWeight: '900', color: '#111827', marginBottom: 10 },
@@ -712,11 +698,4 @@ const styles = StyleSheet.create({
   attendanceMeta: { color: '#374151', fontWeight: '600' },
 
   modalActions: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 14, gap: 8 },
-
-  // Attendance check rows
-  checkRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10 },
-  checkRowName: { color: '#0F172A', fontSize: 15, fontWeight: '700' },
-  checkbox: { width: 24, height: 24, borderRadius: 6, borderWidth: 2, borderColor: '#CBD5E1', alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' },
-  checkboxChecked: { backgroundColor: '#22C55E', borderColor: '#22C55E' },
-  checkboxTick: { color: '#fff', fontWeight: '900' },
 });
