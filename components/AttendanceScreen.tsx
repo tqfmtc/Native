@@ -23,8 +23,8 @@ import {
 import { calculateDistance, isWithinRadius, LocationCoords } from '../utils/location';
 import { clearStoredCredentials } from '../utils/storage';
 import SideBar from './SideBar'; // ✅ Sidebar import
-import StudentManagement from './StudentManagement'; // ✅ StudentManagement import
-
+import StudentManagement from './StudentManagement'; 
+import SubjectManagement from './SubjectManagement';
 
 interface AttendanceScreenProps {
   userData: LoginResponse;
@@ -41,7 +41,7 @@ export default function AttendanceScreen({ userData, onLogout }: AttendanceScree
   const [checkingButtonStatus, setCheckingButtonStatus] = useState(true);
 
   // View state for navigation
-  const [currentView, setCurrentView] = useState<'attendance' | 'student-management' | 'profile' | 'settings'>('attendance');
+  const [currentView, setCurrentView] = useState<'attendance' | 'student-management' | 'subject-management' | 'settings'>('attendance');
 
   // Sidebar state + animation
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -264,6 +264,9 @@ export default function AttendanceScreen({ userData, onLogout }: AttendanceScree
   const renderContent = () => {
     if (currentView === 'student-management') {
       return <StudentManagement userData={userData} onBack={() => setCurrentView('attendance')} />;
+    }
+    if(currentView === 'subject-management'){
+      return <SubjectManagement userData={userData} onBack={()=> setCurrentView('attendance')} />;
     }
     // For now, profile and settings just show a placeholder
     if (currentView === 'profile' || currentView === 'settings') {
