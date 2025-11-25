@@ -41,7 +41,7 @@ export default function AttendanceScreen({ userData, onLogout }: AttendanceScree
   const [checkingButtonStatus, setCheckingButtonStatus] = useState(true);
 
   // View state for navigation
-  const [currentView, setCurrentView] = useState<'attendance' | 'student-management' | 'subject-management' | 'settings'>('attendance');
+  const [currentView, setCurrentView] = useState<'attendance' | 'student-management' | 'subject-management' | 'settings' | 'profile'>('attendance');
 
   // Sidebar state + animation
   const [sidebarOpen, setSidebarOpen] = useState(false);
@@ -262,12 +262,6 @@ export default function AttendanceScreen({ userData, onLogout }: AttendanceScree
 
   // Render content based on current view
   const renderContent = () => {
-    if (currentView === 'student-management') {
-      return <StudentManagement userData={userData} onBack={() => setCurrentView('attendance')} />;
-    }
-    if(currentView === 'subject-management'){
-      return <SubjectManagement userData={userData} onBack={()=> setCurrentView('attendance')} />;
-    }
     // For now, profile and settings just show a placeholder
     if (currentView === 'profile' || currentView === 'settings') {
       return (
@@ -380,59 +374,68 @@ export default function AttendanceScreen({ userData, onLogout }: AttendanceScree
 
   return (
     <View style={styles.container}>
-      {/* Sidebar overlay */}
-      {sidebarOpen && (
-        <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={toggleSidebar} />
-      )}
+      {/* Render full-screen views without attendance header */}
+      {currentView === 'student-management' ? (
+        <StudentManagement userData={userData} onBack={() => setCurrentView('attendance')} />
+      ) : currentView === 'subject-management' ? (
+        <SubjectManagement userData={userData} onBack={() => setCurrentView('attendance')} />
+      ) : (
+        <>
+          {/* Sidebar overlay */}
+          {sidebarOpen && (
+            <TouchableOpacity style={styles.overlay} activeOpacity={1} onPress={toggleSidebar} />
+          )}
 
+          {/* Animated sidebar */}
+          <Animated.View style={[styles.sidebarContainer, { left: sidebarAnim }]}>
+            <SideBar 
+              onClose={toggleSidebar} 
+              onNavigate={(screen) => {
+                if (screen === '/attendance') {
+                  setCurrentView('attendance');
+                } else if (screen === '/student-management') {
+                  setCurrentView('student-management');
+                } else if (screen === '/subject-management') {
+                  setCurrentView('subject-management');
+                } else if (screen === '/profile') {
+                  setCurrentView('profile');
+                } else if (screen === '/settings') {
+                  setCurrentView('settings');
+                }
+              }} 
+            />
+          </Animated.View>
 
-      {/* Animated sidebar */}
-      <Animated.View style={[styles.sidebarContainer, { left: sidebarAnim }]}>
-        <SideBar 
-          onClose={toggleSidebar} 
-          onNavigate={(screen) => {
-            if (screen === '/attendance') {
-              setCurrentView('attendance');
-            } else if (screen === '/student-management') {
-              setCurrentView('student-management');
-            } else if (screen === '/profile') {
-              setCurrentView('profile');
-            } else if (screen === '/settings') {
-              setCurrentView('settings');
-            }
-          }} 
-        />
-      </Animated.View>
-
-
-      {/* Header with menu button */}
-      <View style={styles.header}>
-        <TouchableOpacity style={styles.hamburgerButton3D} activeOpacity={0.8} onPress={toggleSidebar}>
-           <View style={styles.hamburgerButtonInner}>
-              <View style={styles.hamburgerLine} />
-              <View style={styles.hamburgerLine} />
-              <View style={styles.hamburgerLine} />
-            </View>
-        </TouchableOpacity>
-        {currentView === 'attendance' ? (
-          <>
-            <View style={styles.headerContent}>
-              <Text style={styles.date}>{formatDate()}</Text>
-              <Text style={styles.time}>{formatTime()}</Text>
-              <Text style={styles.centerName}>Center: {userData.assignedCenter?.name || 'No Center Assigned'}</Text>
-              <Text style={styles.username}>Welcome {userData.name || 'Guest'}</Text>
-            </View>
-            <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-              <Text style={styles.logoutButtonText}>Logout</Text>
+          {/* Header with menu button - only for attendance and settings views */}
+          <View style={styles.header}>
+            <TouchableOpacity style={styles.hamburgerButton3D} activeOpacity={0.8} onPress={toggleSidebar}>
+              <View style={styles.hamburgerButtonInner}>
+                <View style={styles.hamburgerLine} />
+                <View style={styles.hamburgerLine} />
+                <View style={styles.hamburgerLine} />
+              </View>
             </TouchableOpacity>
-          </>
-        ) : (
-          <View style={styles.headerContent} />
-        )}
-      </View>
+            {currentView === 'attendance' ? (
+              <>
+                <View style={styles.headerContent}>
+                  <Text style={styles.date}>{formatDate()}</Text>
+                  <Text style={styles.time}>{formatTime()}</Text>
+                  <Text style={styles.centerName}>Center: {userData.assignedCenter?.name || 'No Center Assigned'}</Text>
+                  <Text style={styles.username}>Welcome {userData.name || 'Guest'}</Text>
+                </View>
+                <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
+                  <Text style={styles.logoutButtonText}>Logout</Text>
+                </TouchableOpacity>
+              </>
+            ) : (
+              <View style={styles.headerContent} />
+            )}
+          </View>
 
-      {/* Render content based on current view */}
-      {renderContent()}
+          {/* Render content based on current view */}
+          {renderContent()}
+        </>
+      )}
     </View>
   );
 }

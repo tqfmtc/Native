@@ -29,7 +29,7 @@ const SideBar: React.FC<SideBarProps> = ({ onClose, onNavigate }) => {
       </TouchableOpacity>
 
       <TouchableOpacity style={styles.menuItem} onPress={() => go('/subject-management')}>
-        <Text style={styles.menuText}>Subject Management</Text>
+        <Text style={styles.menuText}>Subject Marks</Text>
       </TouchableOpacity>
 
       <TouchableOpacity style={styles.menuItem} onPress={() => go('/settings')}>

@@ -225,3 +225,73 @@ export const getAnnouncements = async (token: string): Promise<Announcement[]> =
     },
   });
 };
+
+// Get all subjects for a student
+export const getSubjectsByStudent = async (studentId: string, token: string): Promise<any> => {
+  const path = API_CONFIG.ENDPOINTS.STUDENT_SUBJECTS_BY_STUDENT.replace(':studentId', studentId);
+  return apiCall(path, {
+    method: 'GET',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+  });
+};
+
+// Update a student-subject record (marks percentage only)
+export const updateStudentSubjectRecord = async (
+  studentId: string, 
+  subjectId: string, 
+  token: string, 
+  payload: any
+): Promise<any> => {
+  const path = API_CONFIG.ENDPOINTS.STUDENT_SUBJECT_UPDATE
+    .replace(':studentId', studentId)
+    .replace(':subjectId', subjectId);
+  return apiCall(path, {
+    method: 'PUT',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+};
+
+// Delete a student-subject record
+export const deleteStudentSubjectRecord = async (
+  studentId: string, 
+  subjectId: string, 
+  token: string
+): Promise<any> => {
+  const path = API_CONFIG.ENDPOINTS.STUDENT_SUBJECT_DELETE
+    .replace(':studentId', studentId)
+    .replace(':subjectId', subjectId);
+  return apiCall(path, {
+    method: 'DELETE',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+  });
+};
+
+// Add marks to a student-subject record
+export const addStudentSubjectMarks = async (
+  studentId: string,
+  subjectId: string,
+  token: string,
+  payload: { marksPercentage: number; examDate: string }
+): Promise<any> => {
+  const path = API_CONFIG.ENDPOINTS.STUDENT_SUBJECT_ADD_MARKS
+    .replace(':studentId', studentId)
+    .replace(':subjectId', subjectId);
+  return apiCall(path, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
+  });
+};

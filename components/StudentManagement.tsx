@@ -1,22 +1,23 @@
-import React, { useEffect, useMemo, useReducer, useState, memo, useCallback } from 'react';
+import React, { memo, useCallback, useEffect, useMemo, useReducer, useState } from 'react';
 import {
   ActivityIndicator,
   Alert,
+  BackHandler,
   FlatList,
+  KeyboardAvoidingView,
   Modal,
+  Platform,
   ScrollView,
+  StatusBar,
   StyleSheet,
   Text,
   TextInput,
   TouchableOpacity,
   View,
-  StatusBar,
-  KeyboardAvoidingView,
-  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { API_CONFIG } from '../constants/config';
-import { LoginResponse, getStudent, putStudent, markStudentAttendance } from '../utils/api';
+import { LoginResponse, getStudent, getSubjectsByStudent, markStudentAttendance, putStudent } from '../utils/api';
 
 // Types
 type StudentSubject = { _id: string; subject?: { _id: string; name: string } };
@@ -181,17 +182,22 @@ const InfoPair = memo(function InfoPair({ label, value }: { label: string; value
   );
 });
 
-const SubjectsBlock = memo(function SubjectsBlock({ subjects }: { subjects?: StudentSubject[] }) {
+const SubjectsBlock = memo(function SubjectsBlock({ subjects, editable }: { subjects?: any[]; editable?: boolean }) {
   if (!subjects || subjects.length === 0) {
-    return <Text style={styles.mutedCenter}>Empty array currently</Text>;
+    return <Text style={styles.mutedCenter}>No subjects assigned</Text>;
   }
   return (
-    <View style={styles.pillsRow}>
-      {subjects.map(s => (
-        <View key={s._id} style={styles.pill}>
-          <Text style={styles.pillText}>{s.subject?.name || 'Unknown'}</Text>
-        </View>
-      ))}
+    <View>
+      <View style={styles.pillsRow}>
+        {subjects.map(s => (
+          <View key={s._id} style={styles.pill}>
+            <Text style={styles.pillText}>{s.subject?.subjectName || 'Unknown'}</Text>
+          </View>
+        ))}
+      </View>
+      {editable && (
+        <Text style={styles.helperText}>Note: Subjects are managed by using the website</Text>
+      )}
     </View>
   );
 });
@@ -222,6 +228,8 @@ export default function StudentManagement({ userData, onBack }: Props) {
 
   const [studentLoading, setStudentLoading] = useState(false);
   const [studentDetail, setStudentDetail] = useState<Student | null>(null);
+  const [studentSubjects, setStudentSubjects] = useState<any[]>([]); // Subjects for the student (from API)
+  const [subjectsLoading, setSubjectsLoading] = useState(false);
   const [form, dispatch] = useReducer(formReducer, {});
 
   // Attendance modal state
@@ -260,6 +268,19 @@ export default function StudentManagement({ userData, onBack }: Props) {
     loadTutor();
   }, [userData._id, authHeaders]);
 
+  // Handle Android back button
+  useEffect(() => {
+    const backHandler = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (onBack) {
+        onBack();
+        return true;
+      }
+      return false;
+    });
+
+    return () => backHandler.remove();
+  }, [onBack]);
+
   const fetchStudent = async (id: string) => {
     setStudentLoading(true);
     try {
@@ -287,17 +308,32 @@ export default function StudentManagement({ userData, onBack }: Props) {
     }
   };
 
+  const fetchStudentSubjects = async (id: string) => {
+    setSubjectsLoading(true);
+    try {
+      const subjects = await getSubjectsByStudent(id, userData.token);
+      setStudentSubjects(Array.isArray(subjects) ? subjects : []);
+    } catch (e: any) {
+      console.error('Failed to load student subjects:', e?.message);
+      setStudentSubjects([]);
+    } finally {
+      setSubjectsLoading(false);
+    }
+  };
+
   const openModal = (mode: 'view' | 'edit', id: string) => {
     setModalMode(mode);
     setSelectedStudentId(id);
     setModalVisible(true);
     void fetchStudent(id);
+    void fetchStudentSubjects(id);
   };
 
   const closeModal = () => {
     setModalVisible(false);
     setSelectedStudentId(null);
     setStudentDetail(null);
+    setStudentSubjects([]);
   };
 
   const handleSave = async () => {
@@ -466,7 +502,11 @@ export default function StudentManagement({ userData, onBack }: Props) {
           )}
         </Section>
         <Section title="Subjects">
-          {editable ? <SubjectsBlock subjects={form.subjects as StudentSubject[]} /> : <SubjectsBlock subjects={studentDetail.subjects} />}
+          {subjectsLoading ? (
+            <ActivityIndicator size="small" color="#5B7CFF" />
+          ) : (
+            <SubjectsBlock subjects={studentSubjects} editable={editable} />
+          )}
         </Section>
         <Section title="Non-School Going">
           {editable ? (
@@ -520,7 +560,7 @@ export default function StudentManagement({ userData, onBack }: Props) {
   return (
     <>
       <StatusBar translucent backgroundColor="transparent" barStyle="dark-content" />
-      <SafeAreaView edges={['bottom']} style={styles.root}>
+      <SafeAreaView edges={['top', 'bottom', 'left', 'right']} style={styles.root}>
         {/* Top bar with nav + attendance button */}
         <View style={styles.topBar}>
           {onBack ? (
@@ -660,6 +700,7 @@ const styles = StyleSheet.create({
   muted: { color: '#6B7280' },
   mutedCenter: { color: '#6B7280', textAlign: 'center' },
   errorText: { color: '#D32F2F' },
+  helperText: { color: '#9AA0A6', fontSize: 12, fontStyle: 'italic', marginTop: 8 },
 
   card: { backgroundColor: '#FFFFFF', borderRadius: 14, padding: 14, marginBottom: 12, shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 8, shadowOffset: { width: 0, height: 3 }, elevation: 2, borderWidth: StyleSheet.hairlineWidth, borderColor: '#ECEEF5' },
   cardHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
