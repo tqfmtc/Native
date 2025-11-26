@@ -20,9 +20,8 @@ import { API_CONFIG } from '../constants/config';
 import {
     LoginResponse,
     addStudentSubjectMarks,
-    getSubjectsByStudent,
     deleteStudentSubjectRecord,
-    updateStudentSubjectRecord,
+    getSubjectsByStudent,
 } from '../utils/api';
 
 // Types
@@ -136,14 +135,8 @@ export default function SubjectManagement({ userData, onBack }: Props) {
   });
   const [isAddingMarks, setIsAddingMarks] = useState(false);
 
-  // Edit/Delete marks mode
-  const [isEditMode, setIsEditMode] = useState(false);
-  const [editingMarksId, setEditingMarksId] = useState<string | null>(null);
-  const [editingMarksData, setEditingMarksData] = useState({
-    marksPercentage: '',
-    examDate: '',
-  });
-  const [isSubmittingEdit, setIsSubmittingEdit] = useState(false);
+  // Delete marks
+  const [isDeletingMarks, setIsDeletingMarks] = useState(false);
 
   const authHeaders = {
     'Content-Type': 'application/json',
@@ -309,26 +302,6 @@ export default function SubjectManagement({ userData, onBack }: Props) {
     }
   };
 
-  // Handle edit marks - enter edit mode
-  const startEditMarks = (mark: any) => {
-    setEditingMarksId(mark._id);
-    setEditingMarksData({
-      marksPercentage: String(mark.percentage),
-      examDate: formatDate(mark.examDate || mark.recordedAt),
-    });
-    setIsEditMode(true);
-  };
-
-  // Cancel edit mode
-  const cancelEditMarks = () => {
-    setIsEditMode(false);
-    setEditingMarksId(null);
-    setEditingMarksData({
-      marksPercentage: '',
-      examDate: '',
-    });
-  };
-
   // Handle delete marks with confirmation
   const handleDeleteMarks = (mark: any) => {
     Alert.alert(
@@ -352,88 +325,25 @@ export default function SubjectManagement({ userData, onBack }: Props) {
 
   // Confirm and execute delete
   const confirmDeleteMarks = async (mark: any) => {
-    if (!selectedSubject || !selectedStudent) return;
+    if (!selectedSubject || !mark._id) return;
 
     try {
-      setIsSubmittingEdit(true);
+      setIsDeletingMarks(true);
       await deleteStudentSubjectRecord(
-        selectedStudent._id,
+        mark._id,
         selectedSubject._id,
         userData.token
       );
       Alert.alert('Success', 'Marks record deleted successfully!');
       // Refresh subject records
-      await fetchSubjects(selectedStudent._id);
+      if (selectedStudent) {
+        await fetchSubjects(selectedStudent._id);
+      }
       closeSubjectDetails();
     } catch (e: any) {
       Alert.alert('Error', e?.message || 'Failed to delete marks');
     } finally {
-      setIsSubmittingEdit(false);
-    }
-  };
-
-  // Handle save edited marks with confirmation
-  const handleSaveEditMarks = () => {
-    if (!editingMarksData.marksPercentage || isNaN(Number(editingMarksData.marksPercentage))) {
-      Alert.alert('Error', 'Please enter valid marks percentage (0-100)');
-      return;
-    }
-    const percentage = Number(editingMarksData.marksPercentage);
-    if (percentage < 0 || percentage > 100) {
-      Alert.alert('Error', 'Marks must be between 0 and 100');
-      return;
-    }
-    if (!editingMarksData.examDate) {
-      Alert.alert('Error', 'Please select exam date');
-      return;
-    }
-
-    // Show confirmation before saving
-    Alert.alert(
-      'Confirm Update',
-      `Are you sure you want to update this marks record?\n\nNew Marks: ${percentage}%\nNew Date: ${editingMarksData.examDate}\n\nThis will overwrite the previous data.`,
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-        {
-          text: 'Update',
-          style: 'default',
-          onPress: async () => {
-            await confirmSaveEditMarks(percentage);
-          },
-        },
-      ]
-    );
-  };
-
-  // Confirm and execute save edit
-  const confirmSaveEditMarks = async (percentage: number) => {
-    if (!selectedSubject || !selectedStudent || !editingMarksId) return;
-
-    try {
-      setIsSubmittingEdit(true);
-      // Convert display format (DD-MM-YY) to API format (YYYY-MM-DD)
-      const apiExamDate = convertToApiFormat(editingMarksData.examDate);
-
-      await updateStudentSubjectRecord(
-        selectedStudent._id,
-        selectedSubject._id,
-        userData.token,
-        {
-          marksPercentage: percentage,
-          examDate: apiExamDate,
-        }
-      );
-      Alert.alert('Success', 'Marks record updated successfully!');
-      cancelEditMarks();
-      // Refresh subject records
-      await fetchSubjects(selectedStudent._id);
-    } catch (e: any) {
-      Alert.alert('Error', e?.message || 'Failed to update marks');
-    } finally {
-      setIsSubmittingEdit(false);
+      setIsDeletingMarks(false);
     }
   };
 
@@ -510,71 +420,20 @@ export default function SubjectManagement({ userData, onBack }: Props) {
     );
   };
 
-  // Render marks history table
+  // Render marks history table (sorted by exam date)
   const renderMarksHistory = () => {
     if (!selectedSubject || !selectedSubject.marksPercentage || selectedSubject.marksPercentage.length === 0) {
       return <Text style={styles.noMarksText}>No marks records found</Text>;
     }
 
-    // If in edit mode, show edit form
-    if (isEditMode && editingMarksId) {
-      const editingMark = selectedSubject.marksPercentage.find(m => m._id === editingMarksId);
-      if (!editingMark) return null;
-
-      return (
-        <View style={styles.editFormContainer}>
-          <Text style={styles.editFormTitle}>Edit Marks Record</Text>
-          
-          <View style={styles.formGroup}>
-            <Text style={styles.formLabel}>Marks Percentage</Text>
-            <TextInput
-              style={styles.editInput}
-              value={editingMarksData.marksPercentage}
-              onChangeText={(text) => setEditingMarksData(prev => ({ ...prev, marksPercentage: text }))}
-              keyboardType="number-pad"
-              placeholder="0-100"
-              editable={!isSubmittingEdit}
-            />
-          </View>
-
-          <View style={styles.formGroup}>
-            <Text style={styles.formLabel}>Exam Date (DD-MM-YY)</Text>
-            <TextInput
-              style={styles.editInput}
-              value={editingMarksData.examDate}
-              onChangeText={(text) => setEditingMarksData(prev => ({ ...prev, examDate: text }))}
-              placeholder="DD-MM-YY"
-              editable={!isSubmittingEdit}
-            />
-          </View>
-
-          <View style={styles.editFormActions}>
-            <TouchableOpacity 
-              style={[styles.editBtn, styles.editBtnCancel]} 
-              onPress={cancelEditMarks}
-              disabled={isSubmittingEdit}
-            >
-              {isSubmittingEdit ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <Text style={styles.editBtnText}>Cancel</Text>
-              )}
-            </TouchableOpacity>
-            <TouchableOpacity 
-              style={[styles.editBtn, styles.editBtnSave]} 
-              onPress={handleSaveEditMarks}
-              disabled={isSubmittingEdit}
-            >
-              {isSubmittingEdit ? (
-                <ActivityIndicator size="small" color="#fff" />
-              ) : (
-                <Text style={styles.editBtnText}>Save Changes</Text>
-              )}
-            </TouchableOpacity>
-          </View>
-        </View>
-      );
-    }
+    // Sort marks by exam date (ascending order - oldest first)
+    const sortedMarks = [...selectedSubject.marksPercentage].sort((a, b) => {
+      const dateStrA = a.examDate || a.recordedAt || '';
+      const dateStrB = b.examDate || b.recordedAt || '';
+      const dateA = new Date(dateStrA).getTime();
+      const dateB = new Date(dateStrB).getTime();
+      return dateA - dateB;
+    });
 
     return (
       <View style={styles.marksTable}>
@@ -583,11 +442,11 @@ export default function SubjectManagement({ userData, onBack }: Props) {
           <Text style={[styles.tableCell, styles.tableHeader, { flex: 0.6 }]}>S.No</Text>
           <Text style={[styles.tableCell, styles.tableHeader, { flex: 1.5 }]}>Exam Date</Text>
           <Text style={[styles.tableCell, styles.tableHeader, { flex: 1 }]}>Percentage</Text>
-          <Text style={[styles.tableCell, styles.tableHeader, { flex: 1.2 }]}>Actions</Text>
+          <Text style={[styles.tableCell, styles.tableHeader, { flex: 1.2 }]}>Delete</Text>
         </View>
 
         {/* Table Rows */}
-        {selectedSubject.marksPercentage.map((mark, idx) => (
+        {sortedMarks.map((mark, idx) => (
           <View key={mark._id || idx} style={styles.tableRow}>
             <Text style={[styles.tableCell, { flex: 0.6 }]}>{idx + 1}</Text>
             <Text style={[styles.tableCell, { flex: 1.5 }]}>
@@ -597,12 +456,6 @@ export default function SubjectManagement({ userData, onBack }: Props) {
               {mark.percentage}%
             </Text>
             <View style={[{ flex: 1.2 }, styles.actionButtons]}>
-              <TouchableOpacity 
-                style={[styles.actionBtn, styles.actionBtnEdit]}
-                onPress={() => startEditMarks(mark)}
-              >
-                <Text style={styles.actionBtnText}>✎</Text>
-              </TouchableOpacity>
               <TouchableOpacity 
                 style={[styles.actionBtn, styles.actionBtnDelete]}
                 onPress={() => handleDeleteMarks(mark)}
@@ -725,19 +578,9 @@ export default function SubjectManagement({ userData, onBack }: Props) {
                   <Text style={styles.modalTitle}>
                     {selectedSubject?.subject?.subjectName}
                   </Text>
-                  <View style={styles.headerActions}>
-                    {!isEditMode && (
-                      <TouchableOpacity 
-                        style={styles.headerEditBtn}
-                        onPress={() => setIsEditMode(true)}
-                      >
-                        <Text style={styles.headerEditBtnText}>Edit</Text>
-                      </TouchableOpacity>
-                    )}
-                    <TouchableOpacity onPress={closeSubjectDetails}>
-                      <Text style={styles.closeButton}>✕</Text>
-                    </TouchableOpacity>
-                  </View>
+                  <TouchableOpacity onPress={closeSubjectDetails}>
+                    <Text style={styles.closeButton}>✕</Text>
+                  </TouchableOpacity>
                 </View>
 
                 <ScrollView contentContainerStyle={{ paddingBottom: 16 }} keyboardShouldPersistTaps="handled">
@@ -776,21 +619,9 @@ export default function SubjectManagement({ userData, onBack }: Props) {
                 </ScrollView>
 
                 <View style={styles.modalActions}>
-                  {isEditMode ? (
-                    <>
-                      <TouchableOpacity 
-                        style={[styles.btn, styles.btnLight]} 
-                        onPress={cancelEditMarks}
-                        disabled={isSubmittingEdit}
-                      >
-                        <Text style={styles.btnTextDark}>Cancel Edit</Text>
-                      </TouchableOpacity>
-                    </>
-                  ) : (
-                    <TouchableOpacity style={[styles.btn, styles.btnLight]} onPress={closeSubjectDetails}>
-                      <Text style={styles.btnTextDark}>Close</Text>
-                    </TouchableOpacity>
-                  )}
+                  <TouchableOpacity style={[styles.btn, styles.btnLight]} onPress={closeSubjectDetails}>
+                    <Text style={styles.btnTextDark}>Close</Text>
+                  </TouchableOpacity>
                 </View>
               </View>
             </View>
@@ -1351,74 +1182,7 @@ const styles = StyleSheet.create({
     color: '#fff',
   },
 
-  // Edit Form Styles
-  editFormContainer: {
-    backgroundColor: '#F0F9FF',
-    borderRadius: 12,
-    padding: 14,
-    borderWidth: 1,
-    borderColor: '#BAE6FD',
-  },
-
-  editFormTitle: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#0C4A6E',
-    marginBottom: 16,
-  },
-
-  formGroup: {
-    marginBottom: 12,
-  },
-
-  formLabel: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#111827',
-    marginBottom: 6,
-  },
-
-  editInput: {
-    backgroundColor: '#ffffff',
-    borderWidth: 1,
-    borderColor: '#BAE6FD',
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: 13,
-    color: '#0F172A',
-    fontWeight: '500',
-  },
-
-  editFormActions: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 10,
-    marginTop: 16,
-  },
-
-  editBtn: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignItems: 'center',
-    flexDirection: 'row',
-  },
-
-  editBtnCancel: {
-    backgroundColor: '#E5E7EB',
-  },
-
-  editBtnSave: {
-    backgroundColor: '#3B82F6',
-  },
-
-  editBtnText: {
-    fontWeight: '700',
-    fontSize: 13,
-    color: '#fff',
-  },
+  // Edit Form Styles (REMOVED - edit functionality removed)
 
   // Action Buttons in Table
   actionButtons: {
@@ -1436,10 +1200,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
 
-  actionBtnEdit: {
-    backgroundColor: '#DBEAFE',
-  },
-
   actionBtnDelete: {
     backgroundColor: '#FEE2E2',
   },
@@ -1448,27 +1208,5 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: '#0F172A',
-  },
-
-  // Modal Header Actions
-  headerActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-
-  headerEditBtn: {
-    backgroundColor: '#DBEAFE',
-    paddingVertical: 6,
-    paddingHorizontal: 12,
-    borderRadius: 6,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-
-  headerEditBtnText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: '#0C4A6E',
   },
 });

@@ -260,12 +260,12 @@ export const updateStudentSubjectRecord = async (
 
 // Delete a student-subject record
 export const deleteStudentSubjectRecord = async (
-  studentId: string, 
+  markId: string, 
   subjectId: string, 
   token: string
 ): Promise<any> => {
-  const path = API_CONFIG.ENDPOINTS.STUDENT_SUBJECT_DELETE
-    .replace(':studentId', studentId)
+  const path = API_CONFIG.ENDPOINTS.STUDENT_SUBJECT_DELETE_MARK
+    .replace(':markId', markId)
     .replace(':subjectId', subjectId);
   return apiCall(path, {
     method: 'DELETE',

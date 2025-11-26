@@ -4,7 +4,8 @@ import {
     StyleSheet,
     Text,
     TouchableOpacity,
-    View
+    View,
+    Linking
 } from 'react-native';
 import { APP_CONFIG } from '../constants/config';
 
@@ -16,12 +17,16 @@ interface UpdateRequiredScreenProps {
 export default function UpdateRequiredScreen({ currentVersion, onRetry }: UpdateRequiredScreenProps) {
   const handleUpdatePress = () => {
     Alert.alert(
-      'Update Required',
-      'Please download the latest version from your administrator.',
-      [
-        { text: 'OK', style: 'default' },
-      ]
-    );
+    'Update Required',
+    'Please download the latest version from your admin.',
+    [
+      {
+        text: 'Open Website',
+        onPress: () => Linking.openURL('https://tqfmohallatuitioncenters.in'),
+      },
+      { text: 'OK', style: 'cancel' }
+    ]
+  );
   };
 
   return (
