@@ -23,6 +23,7 @@ export interface LoginResponse {
 export interface AttendanceResponse {
   message: string;
   attendance: any;
+  assignedTime?: string;
 }
 
 export type RecentAttendanceItem = any; // Adjust to your backend schema if needed
@@ -114,8 +115,19 @@ export const getButtonStatus = async (token: string): Promise<ButtonStatusRespon
 export const markAttendance = async (currentLocation: [number, number], token: string): Promise<AttendanceResponse> => {
   const url = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.ATTENDANCE}`;
 
+  // Get current time in "H:MM AM/PM" format
+  const now = new Date();
+  let hours = now.getHours();
+  const minutes = now.getMinutes();
+  const ampm = hours >= 12 ? 'PM' : 'AM';
+  hours = hours % 12;
+  hours = hours ? hours : 12; // 0 should be 12
+  const minutesStr = minutes < 10 ? '0' + minutes : minutes.toString();
+  const pressedTime = `${hours}:${minutesStr} ${ampm}`;
+
   const requestBody = {
-    currentLocation: [currentLocation[0], currentLocation[1]] // [lat, lng]
+    currentLocation: [currentLocation[0], currentLocation[1]], // [lat, lng]
+    pressedTime: pressedTime
   };
 
   try {
@@ -127,7 +139,7 @@ export const markAttendance = async (currentLocation: [number, number], token: s
       },
       body: JSON.stringify(requestBody),
     });
-
+    console.log(`${requestBody.pressedTime} - Attendance API Response: ${response.status} ${response.statusText}`);
     if (!response.ok) {
       const errorText = await response.text();
       let errorData;
