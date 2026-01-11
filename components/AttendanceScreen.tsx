@@ -307,7 +307,7 @@ export default function AttendanceScreen({ userData, onLogout }: AttendanceScree
 
           {currentLocation && userData?.assignedCenter && (
             <View style={styles.distanceInfo}>
-              <Text style={styles.distanceText}>
+              {/* <Text style={styles.distanceText}>
                 Distance to center:{' '}
                 {Math.round(
                   calculateDistance(currentLocation, {
@@ -316,15 +316,15 @@ export default function AttendanceScreen({ userData, onLogout }: AttendanceScree
                   })
                 )}
                 m
-              </Text>
-              <Text style={styles.radiusText}>Required: Within {APP_CONFIG.ATTENDANCE_RADIUS}m</Text>
+              </Text> */}
+              {/* <Text style={styles.radiusText}>Required: Within {APP_CONFIG.ATTENDANCE_RADIUS}m</Text> */}
             </View>
           )}
         </View>
 
 
         {/* Map */}
-        <View style={styles.mapContainer}>
+        {/* <View style={styles.mapContainer}>
           {locationLoading ? (
             <View style={styles.mapLoadingContainer}>
               <ActivityIndicator size="large" color="#007AFF" />
@@ -367,7 +367,7 @@ export default function AttendanceScreen({ userData, onLogout }: AttendanceScree
               <Text style={styles.mapErrorText}>Unable to load map</Text>
             </View>
           )}
-        </View>
+        </View> */}
       </>
     );
   };
