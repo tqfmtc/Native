@@ -167,17 +167,24 @@ export const createStudent=async (token: string, payload: any): Promise<any> => 
   });
 }
 
-export const markStudentAttendance=async (token: string, payload: any): Promise<any> => {
+export const markStudentAttendance = async ({
+  token,
+  payload,
+}: {
+  token: string;
+  payload: any;
+}) => {
   const path = API_CONFIG.ENDPOINTS.MARKSTUDENTATTENDANCE;
   return apiCall(path, {
     method: 'POST',
     headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`,
-      },
-      body: JSON.stringify(payload),
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${token}`,
+    },
+    body: JSON.stringify(payload),
   });
-}
+};
+
 
 export const getStudent=async (id: string, token: string): Promise<any> => {
   const path = API_CONFIG.ENDPOINTS.STUDENT.replace(':id', id);

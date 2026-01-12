@@ -391,7 +391,11 @@ export default function StudentManagement({ userData, onBack }: Props) {
     const studentsPayload = selectedIds.map(studentId => ({ studentId, status: 'Present' }));
     try {
       setAttSubmitting(true);
-      await markStudentAttendance({ date: attIsoDate, students: studentsPayload }, userData.token);
+      await markStudentAttendance({
+  token: userData.token,
+  payload: { date: attIsoDate, students: studentsPayload },
+});
+
       Alert.alert('Attendance', 'Marked successfully');
       setAttModalVisible(false);
     } catch (e: any) {
