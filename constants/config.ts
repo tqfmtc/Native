@@ -19,7 +19,7 @@ export const API_CONFIG = {
 };
 
 export const APP_CONFIG = {
-  ATTENDANCE_RADIUS: 20, // meters
+  ATTENDANCE_RADIUS: 50, // meters
   LOGIN_PERSISTENCE_DAYS: 36500, // ~100 years: effectively "never ask to login again"
-  APP_VERSION: '3.0.0' // Current app version
+  APP_VERSION: '3.1.0' // Current app version
 };
