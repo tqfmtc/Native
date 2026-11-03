@@ -112,7 +112,7 @@ export const getButtonStatus = async (token: string): Promise<ButtonStatusRespon
   });
 };
 
-export const markAttendance = async (currentLocation: [number, number], token: string): Promise<AttendanceResponse> => {
+export const  markAttendance = async (currentLocation: [number, number], token: string): Promise<AttendanceResponse> => {
   const url = `${API_CONFIG.BASE_URL}${API_CONFIG.ENDPOINTS.ATTENDANCE}`;
 
   // Get current time in "H:MM AM/PM" format

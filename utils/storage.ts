@@ -63,3 +63,43 @@ export const clearStoredCredentials = async () => {
     throw error;
   }
 };
+
+// Attendance tracking
+export const getTodayAttendanceKey = () => {
+  const today = new Date().toISOString().slice(0, 10); // yyyy-mm-dd
+  return `attendance_marked_${today}`;
+};
+
+export const saveMarkedAttendance = async (studentIds: string[]) => {
+  try {
+    const key = getTodayAttendanceKey();
+    await AsyncStorage.setItem(key, JSON.stringify(studentIds));
+  } catch (error) {
+    console.error('Error saving marked attendance:', error);
+    throw error;
+  }
+};
+
+export const getMarkedAttendance = async (): Promise<string[]> => {
+  try {
+    const key = getTodayAttendanceKey();
+    const stored = await AsyncStorage.getItem(key);
+    return stored ? JSON.parse(stored) : [];
+  } catch (error) {
+    console.error('Error getting marked attendance:', error);
+    return [];
+  }
+};
+
+export const addMarkedStudent = async (studentId: string) => {
+  try {
+    const marked = await getMarkedAttendance();
+    if (!marked.includes(studentId)) {
+      marked.push(studentId);
+      await saveMarkedAttendance(marked);
+    }
+  } catch (error) {
+    console.error('Error adding marked student:', error);
+    throw error;
+  }
+};
