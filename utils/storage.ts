@@ -66,7 +66,9 @@ export const clearStoredCredentials = async () => {
 
 // Attendance tracking
 export const getTodayAttendanceKey = () => {
-  const today = new Date().toISOString().slice(0, 10); // yyyy-mm-dd
+  // yyyy-mm-dd in local time (toISOString() is UTC: yesterday before 05:30 IST)
+  const d = new Date();
+  const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   return `attendance_marked_${today}`;
 };
 
