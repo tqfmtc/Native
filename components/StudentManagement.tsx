@@ -55,7 +55,11 @@ const buildUrl = (template: string, params: Record<string, string>) =>
 
 const toId = (val?: RefId | string) => (typeof val === 'string' ? val : (val?._id || undefined));
 
-const todayIso = () => new Date().toISOString().slice(0, 10); // yyyy-mm-dd
+// yyyy-mm-dd in the phone's local time (toISOString() is UTC: yesterday before 05:30 IST)
+const todayIso = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
 const isoToDdMmYy = (iso: string) => {
   // yyyy-mm-dd -> dd-mm-yy
   const [y, m, d] = iso.split('-');
