@@ -395,7 +395,16 @@ export default function StudentManagement({ userData, onBack }: Props) {
       Alert.alert('Required', 'Pick at least one student');
       return;
     }
-    const studentsPayload = selectedIds.map(studentId => ({ studentId, status: 'Present' }));
+    // Everyone still listed (not yet marked present today) who isn't checked is absent.
+    // Without the Absent entries every student's attendance percentage was 100%.
+    // The server upgrades Absent -> Present if they're marked again later today.
+    const absentIds = students
+      .filter(s => !markedStudentIds.includes(s._id) && !attSelections[s._id])
+      .map(s => s._id);
+    const studentsPayload = [
+      ...selectedIds.map(studentId => ({ studentId, status: 'Present' })),
+      ...absentIds.map(studentId => ({ studentId, status: 'Absent' })),
+    ];
     try {
       setAttSubmitting(true);
       await markStudentAttendance({
