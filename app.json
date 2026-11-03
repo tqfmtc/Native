@@ -40,7 +40,8 @@
           "backgroundColor": "#f5f5f5"
         }
       ],
-      "expo-maps"
+      "expo-maps",
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true
