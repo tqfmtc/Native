@@ -18,6 +18,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { API_CONFIG } from '../constants/config';
 import { LoginResponse, getStudent, getSubjectsByStudent, markStudentAttendance, putStudent } from '../utils/api';
+import { getMarkedAttendance, saveMarkedAttendance } from '../utils/storage';
 
 // Types
 type StudentSubject = { _id: string; subject?: { _id: string; name: string } };
@@ -238,6 +239,7 @@ export default function StudentManagement({ userData, onBack }: Props) {
   const [attSubmitting, setAttSubmitting] = useState(false);
   const [attIsoDate, setAttIsoDate] = useState(todayIso); // internal yyyy-mm-dd
   const attDisplayDate = isoToDdMmYy(attIsoDate); // shown to user as dd-mm-yy
+  const [markedStudentIds, setMarkedStudentIds] = useState<string[]>([]);
 
   const authHeaders = useMemo(
     () => ({
@@ -357,7 +359,10 @@ export default function StudentManagement({ userData, onBack }: Props) {
       schoolInfo: !form.isNonSchoolGoing ? { name: form.schoolInfo?.name || '', class: form.schoolInfo?.class || '' } : undefined,
       assignedCenter: toId(form.assignedCenter as any),
       assignedTutor: toId(form.assignedTutor as any),
-      subjects: Array.isArray(form.subjects) ? (form.subjects as StudentSubject[]).map(s => s._id) : [],
+      // Backend expects Subject ids, not the StudentSubject record ids
+      subjects: Array.isArray(form.subjects)
+        ? (form.subjects as StudentSubject[]).map(s => s.subject?._id).filter((id): id is string => !!id)
+        : [],
     };
     try {
       const updated = await putStudent(selectedStudentId, userData.token, payload);
@@ -371,10 +376,12 @@ export default function StudentManagement({ userData, onBack }: Props) {
   };
 
   // Attendance
-  const openAttendance = () => {
+  const openAttendance = async () => {
     setAttSelections({});
     const iso = todayIso();
     setAttIsoDate(iso);
+    const marked = await getMarkedAttendance();
+    setMarkedStudentIds(marked);
     setAttModalVisible(true);
   };
 
@@ -395,6 +402,11 @@ export default function StudentManagement({ userData, onBack }: Props) {
   token: userData.token,
   payload: { date: attIsoDate, students: studentsPayload },
 });
+
+      // Save marked students to local storage
+      const updatedMarked = [...markedStudentIds, ...selectedIds];
+      await saveMarkedAttendance(updatedMarked);
+      setMarkedStudentIds(updatedMarked);
 
       Alert.alert('Attendance', 'Marked successfully');
       setAttModalVisible(false);
@@ -610,23 +622,32 @@ export default function StudentManagement({ userData, onBack }: Props) {
         <Modal visible={attModalVisible} transparent animationType="fade" onRequestClose={() => setAttModalVisible(false)}>
           <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={Platform.OS === 'ios' ? 10 : 0}>
             <View style={styles.modalBackdrop}>
-              <View style={styles.modalCard}>
-                <Text style={styles.modalTitle}>Mark Attendance</Text>
+              <View style={styles.modalCardAttendance}>
+                <ScrollView contentContainerStyle={{ paddingBottom: 12 }} keyboardShouldPersistTaps="handled">
+                  <View style={styles.attHeaderRow}>
+                    <Text style={styles.modalTitle}>Mark Attendance</Text>
+                    {markedStudentIds.length > 0 && (
+                      <View style={styles.markedBadge}>
+                        <Text style={styles.markedBadgeText}>{markedStudentIds.length}</Text>
+                      </View>
+                    )}
+                  </View>
 
-                {/* Read-only date in dd-mm-yy */}
-                <View style={styles.infoPair}>
-                  <Text style={styles.infoLabel}>Date</Text>
-                  <Text style={styles.infoValue}>{attDisplayDate}</Text>
-                </View>
+                  {/* Read-only date in dd-mm-yy */}
+                  <View style={styles.infoPair}>
+                    <Text style={styles.infoLabel}>Date</Text>
+                    <Text style={styles.infoValue}>{attDisplayDate}</Text>
+                  </View>
 
-                <View style={styles.section}>
-                  <Text style={styles.sectionTitle}>Students</Text>
-                  <View style={{ maxHeight: 320 }}>
-                    <ScrollView keyboardShouldPersistTaps="handled">
-                      {students.map(s => {
+                  <View style={styles.section}>
+                    <Text style={styles.sectionTitle}>Students</Text>
+                    {students
+                      .filter(s => !markedStudentIds.includes(s._id))
+                      .map((s, index) => {
                         const checked = !!attSelections[s._id];
                         return (
                           <TouchableOpacity key={s._id} onPress={() => toggleStudentCheck(s._id)} activeOpacity={0.8} style={styles.checkRow}>
+                            <Text style={styles.checkRowIndex}>{index + 1}</Text>
                             <Text style={styles.checkRowName}>{s.name}</Text>
                             <View style={[styles.checkbox, checked && styles.checkboxChecked]}>
                               {checked ? <Text style={styles.checkboxTick}>✓</Text> : null}
@@ -634,11 +655,13 @@ export default function StudentManagement({ userData, onBack }: Props) {
                           </TouchableOpacity>
                         );
                       })}
-                    </ScrollView>
+                    {students.filter(s => !markedStudentIds.includes(s._id)).length === 0 && (
+                      <Text style={styles.mutedCenter}>All students marked for today</Text>
+                    )}
                   </View>
-                </View>
+                </ScrollView>
 
-                <View style={styles.modalActions}>
+                <View style={styles.modalActionsAttendance}>
                   <TouchableOpacity style={[styles.btn, styles.btnLight]} onPress={() => setAttModalVisible(false)}>
                     <Text style={styles.btnTextDark}>Cancel</Text>
                   </TouchableOpacity>
@@ -730,7 +753,11 @@ const styles = StyleSheet.create({
 
   modalBackdrop: { flex: 1, backgroundColor: 'rgba(15, 23, 42, 0.35)', justifyContent: 'center', padding: 12 },
   modalCard: { backgroundColor: '#ffffff', borderRadius: 16, maxHeight: '85%', padding: 12, borderWidth: StyleSheet.hairlineWidth, borderColor: '#ECEEF5' },
+  modalCardAttendance: { backgroundColor: '#ffffff', borderRadius: 16, maxHeight: '90%', padding: 12, borderWidth: StyleSheet.hairlineWidth, borderColor: '#ECEEF5', flexDirection: 'column', flex: 1 },
   modalTitle: { fontSize: 16, fontWeight: '900', color: '#111827', textAlign: 'center', marginBottom: 8 },
+  attHeaderRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 8, position: 'relative' },
+  markedBadge: { position: 'absolute', right: 0, backgroundColor: '#22C55E', borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4, minWidth: 32, alignItems: 'center', justifyContent: 'center' },
+  markedBadgeText: { color: '#fff', fontWeight: '900', fontSize: 12 },
 
   section: { backgroundColor: '#FAFBFF', borderRadius: 12, padding: 12, borderWidth: StyleSheet.hairlineWidth, borderColor: '#E9ECF3', marginTop: 12 },
   sectionTitle: { fontSize: 14, fontWeight: '900', color: '#111827', marginBottom: 10 },
@@ -757,10 +784,12 @@ const styles = StyleSheet.create({
   attendanceMeta: { color: '#374151', fontWeight: '600' },
 
   modalActions: { flexDirection: 'row', justifyContent: 'flex-end', marginTop: 14, gap: 8 },
+  modalActionsAttendance: { flexDirection: 'row', justifyContent: 'flex-end', gap: 8, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: '#E9ECF3' },
 
   // Attendance check rows
   checkRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 10 },
-  checkRowName: { color: '#0F172A', fontSize: 15, fontWeight: '700' },
+  checkRowIndex: { color: '#9AA0A6', fontSize: 13, fontWeight: '700', width: 28, marginRight: 8 },
+  checkRowName: { color: '#0F172A', fontSize: 15, fontWeight: '700', flex: 1 },
   checkbox: { width: 24, height: 24, borderRadius: 6, borderWidth: 2, borderColor: '#CBD5E1', alignItems: 'center', justifyContent: 'center', backgroundColor: '#fff' },
   checkboxChecked: { backgroundColor: '#22C55E', borderColor: '#22C55E' },
   checkboxTick: { color: '#fff', fontWeight: '900' },
