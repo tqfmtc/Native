@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as SecureStore from 'expo-secure-store';
 import { APP_CONFIG } from '../constants/config';
 
 const STORAGE_KEYS = {
@@ -7,10 +8,13 @@ const STORAGE_KEYS = {
   LOGIN_TIMESTAMP: 'loginTimestamp'
 };
 
+// The password lives in SecureStore (Android Keystore / iOS Keychain), never in
+// AsyncStorage, which is unencrypted and readable from device backups.
 export const saveLoginCredentials = async (phone: string, password: string) => {
   try {
     await AsyncStorage.setItem(STORAGE_KEYS.PHONE, phone);
-    await AsyncStorage.setItem(STORAGE_KEYS.PASSWORD, password);
+    await SecureStore.setItemAsync(STORAGE_KEYS.PASSWORD, password);
+    await AsyncStorage.removeItem(STORAGE_KEYS.PASSWORD);
     await AsyncStorage.setItem(STORAGE_KEYS.LOGIN_TIMESTAMP, Date.now().toString());
   } catch (error) {
     console.error('Error saving login credentials:', error);
@@ -21,8 +25,18 @@ export const saveLoginCredentials = async (phone: string, password: string) => {
 export const getStoredCredentials = async (): Promise<{phone: string, password: string} | null> => {
   try {
     const phone = await AsyncStorage.getItem(STORAGE_KEYS.PHONE);
-    const password = await AsyncStorage.getItem(STORAGE_KEYS.PASSWORD);
-    
+    let password = await SecureStore.getItemAsync(STORAGE_KEYS.PASSWORD);
+
+    // Migrate installs from older versions that kept the password in AsyncStorage
+    if (!password) {
+      const legacy = await AsyncStorage.getItem(STORAGE_KEYS.PASSWORD);
+      if (legacy) {
+        await SecureStore.setItemAsync(STORAGE_KEYS.PASSWORD, legacy);
+        await AsyncStorage.removeItem(STORAGE_KEYS.PASSWORD);
+        password = legacy;
+      }
+    }
+
     if (phone && password) {
       return { phone, password };
     }
@@ -58,6 +72,7 @@ export const clearStoredCredentials = async () => {
       STORAGE_KEYS.PASSWORD,
       STORAGE_KEYS.LOGIN_TIMESTAMP
     ]);
+    await SecureStore.deleteItemAsync(STORAGE_KEYS.PASSWORD);
   } catch (error) {
     console.error('Error clearing stored credentials:', error);
     throw error;
