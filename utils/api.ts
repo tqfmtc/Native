@@ -5,6 +5,15 @@ export interface LoginPayload {
   password: string;
 }
 
+export interface AssignedCenter {
+  _id: string;
+  name: string;
+  location: string;
+  coordinates: [number, number]; // [latitude, longitude] - as stored in backend
+  sessionType?: string;
+  sessionTiming?: string;
+}
+
 export interface LoginResponse {
   _id: string;
   name: string;
@@ -12,13 +21,17 @@ export interface LoginResponse {
   phone: string;
   role: string;
   token: string;
-  assignedCenter: {
-    _id: string;
-    name: string;
-    location: string;
-    coordinates: [number, number]; // [latitude, longitude] - as stored in backend
-  } | null;
+  // Every center the tutor teaches at (backends before multi-center send only assignedCenter)
+  assignedCenters?: AssignedCenter[];
+  // First center only, kept for older app versions
+  assignedCenter: AssignedCenter | null;
 }
+
+// The tutor's centers from a login response
+export const tutorCentersOf = (user?: Partial<LoginResponse> | null): AssignedCenter[] =>
+  user?.assignedCenters?.length
+    ? user.assignedCenters
+    : (user?.assignedCenter ? [user.assignedCenter] : []);
 
 export interface AttendanceResponse {
   message: string;

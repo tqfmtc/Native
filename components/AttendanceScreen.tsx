@@ -14,11 +14,13 @@ import { WebView } from 'react-native-webview';
 import { APP_CONFIG } from '../constants/config';
 import {
     Announcement,
+    AssignedCenter,
     getAnnouncements,
     getButtonStatus,
     getRecentAttendance,
     LoginResponse,
     markAttendance,
+    tutorCentersOf,
 } from '../utils/api';
 import { calculateDistance, isWithinRadius, LocationCoords } from '../utils/location';
 import { clearStoredCredentials } from '../utils/storage';
@@ -32,9 +34,24 @@ interface AttendanceScreenProps {
 }
 
 
+const centerCoords = (center: AssignedCenter): LocationCoords => ({
+  lat: center.coordinates[0],
+  lng: center.coordinates[1],
+});
+
+// The center nearest to a location: attendance counts for it (the server picks it the same way)
+const nearestCenter = (centers: AssignedCenter[], location: LocationCoords | null): AssignedCenter | null => {
+  const usable = centers.filter(c => Array.isArray(c.coordinates) && c.coordinates.length === 2);
+  if (!usable.length) return null;
+  if (!location) return usable[0];
+  return usable.reduce((best, c) =>
+    calculateDistance(location, centerCoords(c)) < calculateDistance(location, centerCoords(best)) ? c : best);
+};
+
 export default function AttendanceScreen({ userData, onLogout }: AttendanceScreenProps) {
   const [currentLocation, setCurrentLocation] = useState<LocationCoords | null>(null);
-  const [attendanceMarked, setAttendanceMarked] = useState(false);
+  // Centers already marked today (a tutor can be marked once at each of their centers)
+  const [markedCenterIds, setMarkedCenterIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const [locationLoading, setLocationLoading] = useState(true);
   const [buttonEnabled, setButtonEnabled] = useState(true);
@@ -46,6 +63,15 @@ export default function AttendanceScreen({ userData, onLogout }: AttendanceScree
   // Sidebar state + animation
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const sidebarAnim = useState(new Animated.Value(-250))[0];
+
+  const myCenters = tutorCentersOf(userData);
+  const activeCenter = nearestCenter(myCenters, currentLocation);
+  const markMarked = (centerId?: string) => {
+    if (centerId) setMarkedCenterIds(ids => (ids.includes(centerId) ? ids : [...ids, centerId]));
+  };
+  // The button is done for the day only once every center is marked
+  const attendanceMarked = myCenters.length > 0 && myCenters.every(c => markedCenterIds.includes(c._id));
+  const markedNames = myCenters.filter(c => markedCenterIds.includes(c._id)).map(c => c.name);
 
 
   const toggleSidebar = () => {
@@ -93,7 +119,10 @@ export default function AttendanceScreen({ userData, onLogout }: AttendanceScree
     try {
       const recent = await getRecentAttendance(userData.token);
       if (Array.isArray(recent) && recent.length > 0) {
-        setAttendanceMarked(true);
+        // Today's records, one per center (center is populated with _id and name)
+        const ids = recent.map((r: any) => String(r?.center?._id ?? r?.center ?? '')).filter(Boolean);
+        // Single-center tutors: any record today means done (as before)
+        setMarkedCenterIds(myCenters.length === 1 ? [myCenters[0]._id, ...ids] : ids);
       }
     } catch (err) {
       console.log('Failed to check recent attendance:', err);
@@ -116,12 +145,13 @@ export default function AttendanceScreen({ userData, onLogout }: AttendanceScree
   };
 
 
-  const getCurrentLocation = async () => {
+  // Reads the location, stores it and returns it (null on failure)
+  const getCurrentLocation = async (): Promise<LocationCoords | null> => {
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
         Alert.alert('Permission Denied', 'Location permission is required to mark attendance');
-        return;
+        return null;
       }
 
 
@@ -130,13 +160,16 @@ export default function AttendanceScreen({ userData, onLogout }: AttendanceScree
       });
 
 
-      setCurrentLocation({
+      const coords = {
         lat: location.coords.latitude,
         lng: location.coords.longitude,
-      });
+      };
+      setCurrentLocation(coords);
+      return coords;
     } catch (error) {
       Alert.alert('Location Error', 'Unable to get your current location');
       console.error('Location error:', error);
+      return null;
     } finally {
       setLocationLoading(false);
     }
@@ -156,26 +189,34 @@ export default function AttendanceScreen({ userData, onLogout }: AttendanceScree
     }
 
 
-    if (!currentLocation || !userData?.assignedCenter) {
+    // Fresh location: a tutor with several centers may have moved since the screen opened
+    setLoading(true);
+    const here = (myCenters.length > 1 ? await getCurrentLocation() : null) || currentLocation;
+    setLoading(false);
+    const center = nearestCenter(myCenters, here);
+
+    if (!here || !center) {
       Alert.alert('Error', 'Location or center data not available');
       return;
     }
 
+    if (markedCenterIds.includes(center._id)) {
+      Alert.alert('Already Marked', `Attendance is already marked at ${center.name} today.`);
+      return;
+    }
 
-    const centerLocation: LocationCoords = {
-      lat: userData.assignedCenter.coordinates[0],
-      lng: userData.assignedCenter.coordinates[1],
-    };
+
+    const centerLocation = centerCoords(center);
 
 
-    const withinRadius = isWithinRadius(currentLocation, centerLocation, APP_CONFIG.ATTENDANCE_RADIUS);
+    const withinRadius = isWithinRadius(here, centerLocation, APP_CONFIG.ATTENDANCE_RADIUS);
 
 
     if (!withinRadius) {
-      const distance = Math.round(calculateDistance(currentLocation, centerLocation));
+      const distance = Math.round(calculateDistance(here, centerLocation));
       Alert.alert(
         'Out of Range',
-        `You are ${distance}m away from the center. You need to be within ${APP_CONFIG.ATTENDANCE_RADIUS}m to mark attendance.`
+        `You are ${distance}m away from ${myCenters.length > 1 ? `the nearest center (${center.name})` : 'the center'}. You need to be within ${APP_CONFIG.ATTENDANCE_RADIUS}m to mark attendance.`
       );
       return;
     }
@@ -183,7 +224,7 @@ export default function AttendanceScreen({ userData, onLogout }: AttendanceScree
 
     setLoading(true);
     try {
-      const coordinates: [number, number] = [currentLocation.lat, currentLocation.lng];
+      const coordinates: [number, number] = [here.lat, here.lng];
 
 
       if (!Array.isArray(coordinates) || coordinates.length !== 2 || !coordinates.every(coord => typeof coord === 'number' && !isNaN(coord))) {
@@ -192,16 +233,19 @@ export default function AttendanceScreen({ userData, onLogout }: AttendanceScree
 
 
       const resp = await markAttendance(coordinates, userData.token);
+      // The server reports which center it recorded (the nearest one, as above)
+      const recordedCenter = String(resp?.attendance?.center ?? center._id);
+      const where = myCenters.length > 1 ? ` at ${resp?.attendance?.centerName || center.name}` : '';
       if (resp?.message === 'Attendance submitted successfully') {
-        setAttendanceMarked(true);
-        Alert.alert('Success', 'Attendance marked successfully');
+        markMarked(recordedCenter);
+        Alert.alert('Success', `Attendance marked successfully${where}`);
       } else if (resp?.message === 'Attendance disabled by Admin') {
         Alert.alert('Attendance Disabled', 'Attendance marking has been disabled by the ADMIN.');
       } else if (resp?.message === 'Attendance only allowed at respective time') {
         Alert.alert('Attendance not allowed', `Attendance can only be marked during ${resp.assignedTime}.`);
       } else {
-        setAttendanceMarked(true);
-        Alert.alert('Success', resp?.message || 'Attendance marked successfully');
+        markMarked(recordedCenter);
+        Alert.alert('Success', resp?.message || `Attendance marked successfully${where}`);
       }
     } catch (error) {
       console.error('Attendance marking error:', error);
@@ -305,7 +349,13 @@ export default function AttendanceScreen({ userData, onLogout }: AttendanceScree
           </TouchableOpacity>
 
 
-          {currentLocation && userData?.assignedCenter && (
+          {myCenters.length > 1 && markedNames.length > 0 && (
+            <View style={styles.distanceInfo}>
+              <Text style={styles.radiusText}>Marked today: {markedNames.join(', ')}</Text>
+            </View>
+          )}
+
+          {currentLocation && activeCenter && (
             <View style={styles.distanceInfo}>
               {/* <Text style={styles.distanceText}>
                 Distance to center:{' '}
@@ -420,7 +470,9 @@ export default function AttendanceScreen({ userData, onLogout }: AttendanceScree
                 <View style={styles.headerContent}>
                   <Text style={styles.date}>{formatDate()}</Text>
                   <Text style={styles.time}>{formatTime()}</Text>
-                  <Text style={styles.centerName}>Center: {userData.assignedCenter?.name || 'No Center Assigned'}</Text>
+                  <Text style={styles.centerName}>
+                    {myCenters.length > 1 ? 'Centers' : 'Center'}: {myCenters.map(c => c.name).join(', ') || 'No Center Assigned'}
+                  </Text>
                   <Text style={styles.username}>Welcome {userData.name || 'Guest'}</Text>
                 </View>
                 <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
