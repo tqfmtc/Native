@@ -17,7 +17,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { API_CONFIG } from '../constants/config';
-import { LoginResponse, getStudent, getSubjectsByStudent, markStudentAttendance, putStudent } from '../utils/api';
+import { LoginResponse, getStudent, getSubjectsByStudent, markStudentAttendance, putStudent, tutorCentersOf } from '../utils/api';
 import { getMarkedAttendance, saveMarkedAttendance } from '../utils/storage';
 
 // Types
@@ -245,6 +245,19 @@ export default function StudentManagement({ userData, onBack }: Props) {
   const attDisplayDate = isoToDdMmYy(attIsoDate); // shown to user as dd-mm-yy
   const [markedStudentIds, setMarkedStudentIds] = useState<string[]>([]);
 
+  // Tutors with several centers mark one center at a time, so unchecked students of
+  // another center aren't recorded absent. (Needs students' assignedCenter from the server.)
+  const myCenters = tutorCentersOf(userData);
+  const [attCenterId, setAttCenterId] = useState<string | null>(null);
+  const groupByCenter = myCenters.length > 1 && students.some(s => s.assignedCenter);
+  const attStudents = groupByCenter && attCenterId
+    ? students.filter(s => toId(s.assignedCenter) === attCenterId)
+    : students;
+  const pickAttCenter = (centerId: string) => {
+    setAttCenterId(centerId);
+    setAttSelections({});
+  };
+
   const authHeaders = useMemo(
     () => ({
       'Content-Type': 'application/json',
@@ -382,6 +395,7 @@ export default function StudentManagement({ userData, onBack }: Props) {
   // Attendance
   const openAttendance = async () => {
     setAttSelections({});
+    setAttCenterId(myCenters.length > 1 ? myCenters[0]._id : null);
     const iso = todayIso();
     setAttIsoDate(iso);
     const marked = await getMarkedAttendance();
@@ -394,7 +408,8 @@ export default function StudentManagement({ userData, onBack }: Props) {
   };
 
   const submitAttendance = async () => {
-    const selectedIds = Object.keys(attSelections).filter(id => attSelections[id]);
+    const listedIds = new Set(attStudents.map(s => s._id));
+    const selectedIds = Object.keys(attSelections).filter(id => attSelections[id] && listedIds.has(id));
     if (!attIsoDate || selectedIds.length === 0) {
       Alert.alert('Required', 'Pick at least one student');
       return;
@@ -402,7 +417,7 @@ export default function StudentManagement({ userData, onBack }: Props) {
     // Everyone still listed (not yet marked present today) who isn't checked is absent.
     // Without the Absent entries every student's attendance percentage was 100%.
     // The server upgrades Absent -> Present if they're marked again later today.
-    const absentIds = students
+    const absentIds = attStudents
       .filter(s => !markedStudentIds.includes(s._id) && !attSelections[s._id])
       .map(s => s._id);
     const studentsPayload = [
@@ -413,7 +428,8 @@ export default function StudentManagement({ userData, onBack }: Props) {
       setAttSubmitting(true);
       await markStudentAttendance({
   token: userData.token,
-  payload: { date: attIsoDate, students: studentsPayload },
+  // centerId makes the server reject any student outside the chosen center
+  payload: { date: attIsoDate, students: studentsPayload, ...(groupByCenter && attCenterId ? { centerId: attCenterId } : {}) },
 });
 
       // Save marked students to local storage
@@ -652,9 +668,30 @@ export default function StudentManagement({ userData, onBack }: Props) {
                     <Text style={styles.infoValue}>{attDisplayDate}</Text>
                   </View>
 
+                  {groupByCenter && (
+                    <View style={styles.infoPair}>
+                      <Text style={styles.infoLabel}>Center</Text>
+                      <View style={styles.centerChips}>
+                        {myCenters.map(c => {
+                          const active = c._id === attCenterId;
+                          return (
+                            <TouchableOpacity
+                              key={c._id}
+                              onPress={() => pickAttCenter(c._id)}
+                              activeOpacity={0.8}
+                              style={[styles.centerChip, active && styles.centerChipActive]}
+                            >
+                              <Text style={[styles.centerChipText, active && styles.centerChipTextActive]}>{c.name}</Text>
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                    </View>
+                  )}
+
                   <View style={styles.section}>
                     <Text style={styles.sectionTitle}>Students</Text>
-                    {students
+                    {attStudents
                       .filter(s => !markedStudentIds.includes(s._id))
                       .map((s, index) => {
                         const checked = !!attSelections[s._id];
@@ -668,7 +705,7 @@ export default function StudentManagement({ userData, onBack }: Props) {
                           </TouchableOpacity>
                         );
                       })}
-                    {students.filter(s => !markedStudentIds.includes(s._id)).length === 0 && (
+                    {attStudents.filter(s => !markedStudentIds.includes(s._id)).length === 0 && (
                       <Text style={styles.mutedCenter}>All students marked for today</Text>
                     )}
                   </View>
@@ -776,6 +813,11 @@ const styles = StyleSheet.create({
   sectionTitle: { fontSize: 14, fontWeight: '900', color: '#111827', marginBottom: 10 },
 
   infoPair: { marginBottom: 10 },
+  centerChips: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  centerChip: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 999, backgroundColor: '#F5F7FB', borderWidth: 1, borderColor: '#E3E7F0' },
+  centerChipActive: { backgroundColor: '#5B7CFF', borderColor: '#5B7CFF' },
+  centerChipText: { fontSize: 13, fontWeight: '700', color: '#374151' },
+  centerChipTextActive: { color: '#fff' },
   infoLabel: { fontSize: 12, color: '#6B7280', marginBottom: 4 },
   infoValue: { paddingVertical: 10, paddingHorizontal: 12, backgroundColor: '#F5F7FB', borderRadius: 10, color: '#111827', fontSize: 14, lineHeight: 18 },
 
