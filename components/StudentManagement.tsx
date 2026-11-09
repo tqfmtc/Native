@@ -253,6 +253,12 @@ export default function StudentManagement({ userData, onBack }: Props) {
   const attStudents = groupByCenter && attCenterId
     ? students.filter(s => toId(s.assignedCenter) === attCenterId)
     : students;
+  // The student list can be narrowed to one center (several-center tutors only)
+  const [listCenterId, setListCenterId] = useState<string>('all');
+  const centerNameOf = (s: Student) => myCenters.find(c => c._id === toId(s.assignedCenter))?.name;
+  const visibleStudents = groupByCenter && listCenterId !== 'all'
+    ? students.filter(s => toId(s.assignedCenter) === listCenterId)
+    : students;
   const pickAttCenter = (centerId: string) => {
     setAttCenterId(centerId);
     setAttSelections({});
@@ -462,6 +468,12 @@ export default function StudentManagement({ userData, onBack }: Props) {
         <Text style={styles.label}>Contact</Text>
         <Text style={styles.value}>{item.contact}</Text>
       </View>
+      {groupByCenter && centerNameOf(item) ? (
+        <View style={styles.cardRow}>
+          <Text style={styles.label}>Center</Text>
+          <Text style={styles.value}>{centerNameOf(item)}</Text>
+        </View>
+      ) : null}
       <View style={styles.actions}>
         <TouchableOpacity style={[styles.btn, styles.btnInfo]} onPress={() => openModal('view', item._id)}>
           <Text style={styles.btnText}>View</Text>
@@ -629,10 +641,27 @@ export default function StudentManagement({ userData, onBack }: Props) {
           <View style={styles.center}><Text style={styles.errorText}>{fetchError}</Text></View>
         ) : (
           <FlatList
-            data={students}
+            data={visibleStudents}
+            ListHeaderComponent={groupByCenter ? (
+              <View style={[styles.centerChips, { marginBottom: 12 }]}>
+                {[{ _id: 'all', name: 'All centers' }, ...myCenters].map(c => {
+                  const active = c._id === listCenterId;
+                  return (
+                    <TouchableOpacity
+                      key={c._id}
+                      onPress={() => setListCenterId(c._id)}
+                      activeOpacity={0.8}
+                      style={[styles.centerChip, active && styles.centerChipActive]}
+                    >
+                      <Text style={[styles.centerChipText, active && styles.centerChipTextActive]}>{c.name}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            ) : null}
             keyExtractor={item => item._id}
             renderItem={renderStudentItem}
-            contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 16, flexGrow: 1, justifyContent: students.length === 0 ? 'center' : 'flex-start' }}
+            contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 16, flexGrow: 1, justifyContent: visibleStudents.length === 0 ? 'center' : 'flex-start' }}
             ListEmptyComponent={<View style={styles.center}><Text style={styles.muted}>No students found.</Text></View>}
             keyboardShouldPersistTaps="handled"
           />

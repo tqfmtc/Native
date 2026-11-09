@@ -22,6 +22,7 @@ import {
     addStudentSubjectMarks,
     deleteStudentSubjectRecord,
     getSubjectsByStudent,
+    tutorCentersOf,
 } from '../utils/api';
 
 // Types
@@ -31,6 +32,7 @@ type Student = {
   fatherName: string;
   contact: string;
   status?: 'active' | 'inactive';
+  assignedCenter?: string | { _id?: string };
 };
 
 type TutorResponse = { 
@@ -347,6 +349,13 @@ export default function SubjectManagement({ userData, onBack }: Props) {
     }
   };
 
+  // Tutors with several centers: show which center each student belongs to
+  const myCenters = tutorCentersOf(userData);
+  const centerNameOf = (s: Student) => {
+    const id = typeof s.assignedCenter === 'string' ? s.assignedCenter : s.assignedCenter?._id;
+    return myCenters.find(c => c._id === id)?.name;
+  };
+
   // Render student card
   const renderStudentCard = ({ item }: { item: Student }) => (
     <TouchableOpacity 
@@ -368,6 +377,12 @@ export default function SubjectManagement({ userData, onBack }: Props) {
         <Text style={styles.cardLabel}>Contact</Text>
         <Text style={styles.cardValue}>{item.contact}</Text>
       </View>
+      {myCenters.length > 1 && centerNameOf(item) ? (
+        <View style={styles.cardRow}>
+          <Text style={styles.cardLabel}>Center</Text>
+          <Text style={styles.cardValue}>{centerNameOf(item)}</Text>
+        </View>
+      ) : null}
       <View style={styles.cardFooter}>
         <Text style={styles.tapHint}>Tap to view subjects →</Text>
       </View>
